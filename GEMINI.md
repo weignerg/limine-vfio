@@ -23,6 +23,7 @@ The project includes the **`limine-vfio`** CLI utility, a dynamic post-hook scri
 - **Initramfs:** `/etc/mkinitcpio.conf` (`MODULES=(vfio_pci vfio vfio_iommu_type1)`).
 - **Packaging:** `PKGBUILD`, `limine-vfio.install`, `.SRCINFO`, `LICENSE`.
 - **Documentation:** `README.md`, `HISTORY.md` (milestones & changelog), `TODO.md` (actionable roadmap).
+- **Funding / Sponsors:** `.github/FUNDING.yml` (Buy Me a Coffee: `weignerg`).
 
 ## CLI Commands
 - `limine-vfio check`: Pre-flight diagnostics (CPU virtualization, IOMMU, Limine, modules).

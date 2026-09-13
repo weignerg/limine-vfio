@@ -1,5 +1,10 @@
 # limine-vfio
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](./LICENSE)
+[![Platform: Arch / CachyOS](https://img.shields.io/badge/Platform-Arch%20%7C%20CachyOS-informational?style=flat-square&logo=arch-linux)](https://cachyos.org)
+[![Bootloader: Limine](https://img.shields.io/badge/Bootloader-Limine-brightgreen?style=flat-square)](https://limine-bootloader.org)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support%20Author-orange.svg?style=flat-square&logo=buy-me-a-coffee)](https://buymeacoffee.com/weignerg)
+
 Dynamic PCI Device Passthrough Manager and Bootloader Hook for **Limine** on Arch Linux & CachyOS.
 
 `limine-vfio` is an automated, device-agnostic utility to manage PCI passthrough and hardware isolation. It automates hardware discovery, device classification, IOMMU isolation validation, dynamic Limine boot entry generation, and driver exclusion.
@@ -235,6 +240,14 @@ Runs automatically during kernel installations and updates (`limine-update` / `p
 - Reads all enabled profiles in `/etc/vfio-passthrough.d/`.
 - Dynamically creates boot entries for all installed kernels (e.g. `linux-cachyos-lts-vfio-1060`).
 - Compatible with `limine-mkinitcpio-hook` 1.37.1+ modern filenames (`initramfs` and `vmlinuz`) with legacy fallback support.
+
+---
+
+## Support & Sponsorship
+
+If `limine-vfio` helped streamline your workstation setup, saved you hours of debugging, or made your dual-GPU passthrough workflow seamless, consider buying a coffee to support ongoing maintenance and feature development!
+
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-Support%20Author-orange.svg?style=for-the-badge&logo=buy-me-a-coffee)](https://buymeacoffee.com/weignerg)
 
 ---
 

@@ -64,3 +64,8 @@
 - **Refined Conflict Detection Engine:** Upgraded `check_conflicts` to discover all display GPUs on the PCI bus:
   - Total GPU lockout (isolating all available display cards) is classified as a critical conflict.
   - Multi-GPU setups with alternate passthrough profiles targeting the primary `boot_vga` GPU are recognized as valid alternate configurations and reported with informational notices rather than false-positive errors.
+
+### Session 10: GitHub Sponsors & Buy Me a Coffee Integration
+- **Funding Configuration:** Configured `.github/FUNDING.yml` linking to verified Buy Me a Coffee profile (`weignerg`).
+- **README & Badges:** Integrated official Buy Me a Coffee badges and dedicated "Support & Sponsorship" section in `README.md`.
+- **Profile Assets:** Created personalized avatar (`~/avatar.jpg`) and widescreen banner (`~/banner.jpg`) for the sponsorship profile.
