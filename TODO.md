@@ -45,3 +45,8 @@
   - [x] Verified package archive layout and file permissions
 - [x] **Task 15: Commit & Remote Sync**
   - [x] Synchronize repository to `weignerg/limine-vfio`
+- [x] **Task 16: Document Interim Non-AUR Installation Guidance**
+  - [x] Added interim installation callout in `README.md` explaining AUR registration suspension
+  - [x] Documented native local installation via `makepkg -si`, prebuilt packages, and standalone scripts
+  - [x] Synchronized documentation updates to GitHub remote
+

@@ -37,28 +37,42 @@ It supports passing through **GPUs**, **Network Adapters (NICs)**, **USB Control
 
 ## Installation
 
-### Via AUR (Arch User Repository)
-Once published or installed locally via an AUR helper:
+> [!NOTE]
+> **AUR Status & Interim Installation:**
+> New maintainer account registrations on the Arch User Repository (`aur.archlinux.org`) are temporarily suspended by Arch Linux infrastructure. Until account registrations re-open and `limine-vfio` is submitted to the AUR index, install using **Method 1 (Local `makepkg`)** or **Method 2 (Prebuilt Package)** below. Both methods natively register the package into your system's `pacman` database with full dependency management, pre-flight safety hooks, and clean uninstallation support (`pacman -R limine-vfio`).
+
+### Method 1: Build & Install with `makepkg` (Recommended)
+Clone the repository and build the package natively using Arch's standard package builder:
+```bash
+git clone https://github.com/weignerg/limine-vfio.git
+cd limine-vfio
+makepkg -si
+```
+*The `-s` flag automatically installs any missing dependencies (`pciutils`, `limine`, `limine-entry-tool`), and `-i` registers the package directly with `pacman`.*
+
+### Method 2: Install from Prebuilt Package Archive
+If you have built or downloaded a release package (`.pkg.tar.zst`):
+```bash
+sudo pacman -U limine-vfio-1.0.0-1-any.pkg.tar.zst
+```
+*(Or directly from a GitHub Release URL once published)*
+
+### Method 3: Direct Script Setup (Standalone / Non-Pacman)
+If you prefer running standalone without the package manager:
+```bash
+git clone https://github.com/weignerg/limine-vfio.git
+cd limine-vfio
+sudo ./limine-vfio install
+```
+
+### Method 4: Via AUR Helper (Pending AUR Re-Opening)
+As soon as AUR maintainer signups resume and the package is pushed to the AUR:
 ```bash
 # Using paru
 paru -S limine-vfio
 
 # Using yay
 yay -S limine-vfio
-```
-
-### Manual Package Build (`makepkg`)
-```bash
-git clone https://github.com/weignerg/limine-vfio.git
-cd limine-vfio
-makepkg -si
-```
-
-### Direct Script Setup (without package manager)
-```bash
-git clone https://github.com/weignerg/limine-vfio.git
-cd limine-vfio
-sudo ./limine-vfio install
 ```
 
 ---
