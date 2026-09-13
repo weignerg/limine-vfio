@@ -1,0 +1,9 @@
+# /etc/vfio-passthrough.d/usb.conf.example
+# Passthrough profile for a dedicated PCIe USB Controller
+
+PROFILE="usb-ctrl"
+DEVICE_TYPE="USB"
+DESCRIPTION="USB Controller Passthrough"
+# Replace with target USB controller PCI ID(s)
+PCI_IDS="8086:1138"
+ENABLED="no"

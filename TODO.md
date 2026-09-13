@@ -1,4 +1,4 @@
-# GPU Passthrough Recovery & Automation Tool Task List
+# GPU & Device Passthrough Automation Tool Task List
 
 ## Session 1: Post-Update Passthrough Failure Investigation & Fix
 - [x] **Task 1: System & Boot Investigation** (6.18.50-lts booted without VFIO IDs; GTX 1060 claimed by nouveau)
@@ -8,20 +8,22 @@
 - [x] **Task 5: Git Repository & GitHub Remote Setup** (Initialized repo, committed, created and pushed to `weignerg/cachyos-dual-gpu-vfio`)
 
 ## Session 2: Generalizing into an Interactive CLI Tool (`cachyos-vfio`)
-- [x] **Task 6: Configuration Specification & Generic Hook**
-  - [x] Designed modular `/etc/vfio-passthrough.d/` architecture and global `/etc/vfio-passthrough.conf`
-  - [x] Created `profiles.d/1060.conf.example` and `profiles.d/5090.conf.example`
-  - [x] Refactored `95-vfio-entries` to dynamically parse profiles from `/etc/vfio-passthrough.d/`
-- [x] **Task 7: Build `cachyos-vfio` Management CLI**
-  - [x] Implemented `check` (CPU virtualization, IOMMU state, Limine, mkinitcpio)
-  - [x] Implemented `list-devices` (PCI scanning, IOMMU group mapping, audio pairing detection)
-  - [x] Implemented `status` (active driver bindings, configured profiles, bootloader entries)
-  - [x] Implemented `add` (interactive wizard with IOMMU group validation, profile generation, Limine config)
-  - [x] Implemented `remove` (profile deletion and cleanup)
-  - [x] Implemented `install` (automating deployment, directory setup, profile seeding, and `/usr/local/bin` symlink)
-- [x] **Task 8: Verification & Deployment**
-  - [x] Tested `cachyos-vfio check`, `list-devices`, and `status`
-  - [x] Deployed dynamic hook and seeded `/etc/vfio-passthrough.d/` via `cachyos-vfio install`
-  - [x] Verified `/usr/local/bin/cachyos-vfio` command is directly accessible in system PATH
-  - [x] Updated documentation in `README.md` and `GEMINI.md`
-  - [x] Committed and pushed changes to GitHub
+- [x] **Task 6: Configuration Specification & Generic Hook** (Created `/etc/vfio-passthrough.d/` architecture and dynamic hook)
+- [x] **Task 7: Build `cachyos-vfio` Management CLI** (Implemented `check`, `list-devices`, `status`, `add`, `remove`, `install`)
+- [x] **Task 8: Verification & Deployment** (Deployed hook, seeded profiles, tested `/usr/local/bin/cachyos-vfio`)
+
+## Session 3: Universal Device Classification & Repo Generalization
+- [x] **Task 9: GitHub Repository Renaming**
+  - [x] Renamed GitHub repository from `weignerg/cachyos-dual-gpu-vfio` to `weignerg/cachyos-vfio`
+  - [x] Updated local git remote tracking URL
+- [x] **Task 10: Device Classification & Removing GPU-Specific Assumptions**
+  - [x] Added automated PCI device classification (`GPU`, `NETWORK`, `USB`, `STORAGE`, `AUDIO`, `CAPTURE`, `ACCELERATOR`, `SYSTEM`)
+  - [x] Updated `list-devices` to badge each device with its classification type
+  - [x] Generalized `cmd_add` to detect all passthrough-eligible hardware
+  - [x] Scoped NVIDIA driver exclusion prompts exclusively to NVIDIA GPU devices
+  - [x] Updated `95-vfio-entries` to support `DEVICE_TYPE` in profiles
+  - [x] Added `nic.conf.example` and `usb.conf.example`
+- [x] **Task 11: Verification & Documentation**
+  - [x] Updated `README.md` and `GEMINI.md`
+  - [x] Verified `cachyos-vfio list-devices` and `cachyos-vfio status`
+  - [x] Committed and pushed to GitHub

@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# cachyos-vfio: Interactive Dual-GPU & VFIO Passthrough Manager for Limine/CachyOS
+# cachyos-vfio: Interactive Device Passthrough Manager for Limine & CachyOS/Arch
 # ==============================================================================
-# Supports hardware diagnostics, device isolation, IOMMU grouping checks,
+# Supports hardware diagnostics, device classification, IOMMU grouping checks,
 # dynamic Limine boot entry generation, and driver exclusion configuration.
+# Works for any PCI device (GPU, Network, USB, Audio, Storage, Accelerators).
 # ==============================================================================
 
 set -euo pipefail
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 CONFIG_DIR="/etc/vfio-passthrough.d"
 GLOBAL_CONFIG="/etc/vfio-passthrough.conf"
 LIMINE_DEFAULT="/etc/default/limine"
@@ -20,6 +21,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
 CYAN='\033[0;36m'
 BOLD='\033[1m'
 RESET='\033[0m'
@@ -35,6 +37,56 @@ check_root() {
         msg_err "This operation requires root privileges. Please re-run with sudo."
         exit 1
     fi
+}
+
+# ==============================================================================
+# Device Classification Helper
+# ==============================================================================
+classify_device() {
+    local pci_class="$1"
+    case "$pci_class" in
+        *"VGA"*|*"3D controller"*|*"Display controller"*)
+            echo "GPU"
+            ;;
+        *"Audio device"*)
+            echo "AUDIO"
+            ;;
+        *"Ethernet controller"*|*"Network controller"*)
+            echo "NETWORK"
+            ;;
+        *"USB controller"*)
+            echo "USB"
+            ;;
+        *"Non-Volatile memory"*|*"SATA controller"*)
+            echo "STORAGE"
+            ;;
+        *"Capture"*|*"Video"*)
+            echo "CAPTURE"
+            ;;
+        *"Encryption controller"*|*"Processing accelerators"*)
+            echo "ACCELERATOR"
+            ;;
+        *"Host bridge"*|*"PCI bridge"*|*"IOMMU"*|*"ISA bridge"*|*"Root Complex"*|*"SMBus"*|*"Instrumentation"*)
+            echo "SYSTEM"
+            ;;
+        *)
+            echo "OTHER"
+            ;;
+    esac
+}
+
+get_type_color() {
+    local dev_type="$1"
+    case "$dev_type" in
+        GPU)         echo "${GREEN}${BOLD}" ;;
+        NETWORK)     echo "${BLUE}${BOLD}" ;;
+        USB)         echo "${YELLOW}${BOLD}" ;;
+        AUDIO)       echo "${CYAN}" ;;
+        STORAGE)     echo "${MAGENTA}${BOLD}" ;;
+        CAPTURE)     echo "${CYAN}${BOLD}" ;;
+        ACCELERATOR) echo "${MAGENTA}" ;;
+        *)           echo "${RESET}" ;;
+    esac
 }
 
 # ==============================================================================
@@ -102,7 +154,7 @@ cmd_check() {
     if [[ -x "$HOOK_TARGET" ]]; then
         msg_ok "Installed at ${HOOK_TARGET}"
     else
-        msg_warn "Hook not installed at ${HOOK_TARGET}. Run 'cachyos-vfio install-hook' to deploy."
+        msg_warn "Hook not installed at ${HOOK_TARGET}. Run 'cachyos-vfio install' to deploy."
     fi
 
     # 7. Config Directory
@@ -112,12 +164,12 @@ cmd_check() {
         conf_count=$(find "$CONFIG_DIR" -name "*.conf" | wc -l)
         msg_ok "${CONFIG_DIR} exists (${conf_count} profiles configured)"
     else
-        msg_info "${CONFIG_DIR} does not exist yet. Run 'cachyos-vfio add' to configure your first profile."
+        msg_info "${CONFIG_DIR} does not exist yet. Run 'cachyos-vfio install' or 'cachyos-vfio add' to configure."
     fi
 
     echo ""
     if ((has_errors == 0)); then
-        msg_ok "System is ready for VFIO GPU passthrough configuration!"
+        msg_ok "System is ready for VFIO passthrough configuration!"
     else
         msg_err "Some prerequisites are missing. Please review the warnings above."
     fi
@@ -134,10 +186,9 @@ cmd_list_devices() {
         return 1
     fi
 
-    printf "${BOLD}%-12s %-10s %-16s %-35s %-15s${RESET}\n" "SLOT" "GROUP" "VENDOR:DEVICE" "DESCRIPTION" "DRIVER"
+    printf "${BOLD}%-10s %-9s %-12s %-14s %-32s %-15s${RESET}\n" "SLOT" "GROUP" "TYPE" "PCI ID" "DESCRIPTION" "DRIVER"
     echo "-----------------------------------------------------------------------------------------------------"
 
-    local current_group=""
     for group_dir in $(find /sys/kernel/iommu_groups/ -maxdepth 1 -mindepth 1 -type d | sort -V); do
         local group_num
         group_num=$(basename "$group_dir")
@@ -152,28 +203,30 @@ cmd_list_devices() {
             lspci_info=$(lspci -nns "$pci_slot" 2>/dev/null || true)
             [[ -z "$lspci_info" ]] && continue
 
+            local pci_class
+            pci_class=$(lspci -s "$pci_slot" -vmm 2>/dev/null | awk -F':\t' '/^Class:/ {print $2}' || echo "Unknown")
+            local dev_type
+            dev_type=$(classify_device "$pci_class")
+
+            # Skip system bridges/root ports from general list if user wants cleaner output,
+            # but show everything with type tag
+            local type_color
+            type_color=$(get_type_color "$dev_type")
+
             local ids
             ids=$(echo "$lspci_info" | grep -o '\[[0-9a-fA-F]\{4\}:[0-9a-fA-F]\{4\}\]' | tail -n 1 | tr -d '[]' || true)
 
             local desc
-            desc=$(lspci -s "$pci_slot" | sed 's/^[^:]*: //')
-            # Truncate desc if too long
-            desc="${desc:0:35}"
+            desc=$(lspci -s "$pci_slot" | sed -E 's/^[0-9a-fA-F:.]+[[:space:]]+[^:]+:[[:space:]]*//')
+            desc="${desc:0:36}"
 
             local driver=""
             if [[ -d "${dev_path}/driver" ]]; then
                 driver=$(basename "$(readlink -f "${dev_path}/driver")")
             fi
 
-            # Highlight GPUs and audio controllers
-            local color="${RESET}"
-            if [[ "$lspci_info" =~ (VGA|3D|Display) ]]; then
-                color="${GREEN}${BOLD}"
-            elif [[ "$lspci_info" =~ (Audio) ]]; then
-                color="${CYAN}"
-            fi
-
-            printf "${color}%-12s Group %-4s [%s] %-35s %-15s${RESET}\n" "$short_slot" "$group_num" "$ids" "$desc" "${driver:-none}"
+            printf "${type_color}%-10s Grp %-4s [%-9s] [%s] %-36s %-15s${RESET}\n" \
+                "$short_slot" "$group_num" "$dev_type" "$ids" "$desc" "${driver:-none}"
         done
     done
 }
@@ -189,17 +242,41 @@ cmd_status() {
     echo -e "${BOLD}Kernel Cmdline:${RESET} $(cat /proc/cmdline)"
     echo ""
 
-    # GPU Driver Bindings
-    msg_header "Detected NVIDIA / Graphics Devices"
-    lspci -nnk -d 10de: 2>/dev/null || lspci -nnk | grep -E -A 3 '(VGA|3D)'
+    # Devices Bound to vfio-pci
+    msg_header "Active VFIO Driver Bindings"
+    if [[ -d /sys/bus/pci/drivers/vfio-pci ]]; then
+        local vfio_bound=0
+        for dev in /sys/bus/pci/drivers/vfio-pci/0000:*; do
+            [[ -e "$dev" ]] || continue
+            local slot=$(basename "$dev")
+            local desc=$(lspci -s "$slot" 2>/dev/null || true)
+            echo -e "  ${GREEN}${BOLD}[BOUND]${RESET} ${desc}"
+            vfio_bound=1
+        done
+        if ((vfio_bound == 0)); then
+            msg_info "No PCI devices are currently bound to vfio-pci in this boot session."
+        fi
+    else
+        msg_info "vfio-pci driver is not currently loaded."
+    fi
 
     echo ""
     msg_header "Configured Passthrough Profiles (${CONFIG_DIR})"
     if [[ -d "$CONFIG_DIR" && $(ls -A "$CONFIG_DIR" 2>/dev/null) ]]; then
         for conf in "$CONFIG_DIR"/*.conf; do
             [[ -f "$conf" ]] || continue
-            echo -e "\n${BOLD}File:${RESET} ${conf}"
-            cat "$conf" | grep -E '^(PROFILE|DESCRIPTION|PCI_IDS|ENABLED)='
+            echo -e "\n${BOLD}Profile File:${RESET} ${conf}"
+            while IFS='=' read -r key val || [[ -n "$key" ]]; do
+                key=$(echo "$key" | tr -d '[:space:]')
+                val=$(echo "$val" | sed -e 's/^[[:space:]]*["'"'"']//' -e 's/["'"'"'][[:space:]]*$//')
+                case "$key" in
+                    PROFILE|profile) echo -e "  ${BOLD}Profile Name:${RESET}  ${val}" ;;
+                    DEVICE_TYPE|device_type) echo -e "  ${BOLD}Device Type:${RESET}   ${val}" ;;
+                    DESCRIPTION|description) echo -e "  ${BOLD}Description:${RESET}   ${val}" ;;
+                    PCI_IDS|pci_ids) echo -e "  ${BOLD}PCI IDs:${RESET}       ${val}" ;;
+                    ENABLED|enabled) echo -e "  ${BOLD}Status:${RESET}        ${val}" ;;
+                esac
+            done < "$conf"
         done
     else
         msg_info "No drop-in profiles found in ${CONFIG_DIR}."
@@ -213,106 +290,125 @@ cmd_status() {
 }
 
 # ==============================================================================
-# Add Profile Wizard
+# Add Profile Wizard (Device Agnostic with Classification)
 # ==============================================================================
 cmd_add() {
     check_root
-    msg_header "Add VFIO Passthrough Profile"
+    msg_header "Add Device Passthrough Profile"
 
-    # Scan available graphics/audio devices
-    echo "Scanning available GPUs..."
-    declare -a GPU_SLOTS=()
-    declare -a GPU_DESCS=()
-    declare -a GPU_IDS=()
-    declare -a GPU_GROUPS=()
+    echo "Scanning available PCI devices..."
+    declare -a DEV_SLOTS=()
+    declare -a DEV_TYPES=()
+    declare -a DEV_DESCS=()
+    declare -a DEV_IDS=()
+    declare -a DEV_GROUPS=()
 
     local idx=1
-    while IFS= read -r line; do
-        [[ -z "$line" ]] && continue
-        local slot="${line%% *}"
-        local desc="${line#* }"
-        local full_slot="0000:${slot}"
+    for group_dir in $(find /sys/kernel/iommu_groups/ -maxdepth 1 -mindepth 1 -type d | sort -V); do
+        local group_num=$(basename "$group_dir")
 
-        local group=""
-        if [[ -d "/sys/bus/pci/devices/${full_slot}/iommu_group" ]]; then
-            group=$(basename "$(readlink -f "/sys/bus/pci/devices/${full_slot}/iommu_group")")
-        fi
+        for dev_path in "${group_dir}"/devices/*; do
+            [[ -e "$dev_path" ]] || continue
+            local pci_slot=$(basename "$dev_path")
+            local short_slot="${pci_slot#0000:}"
 
-        # Find vendor:device ID
-        local id
-        id=$(lspci -nns "$slot" | grep -o '\[[0-9a-fA-F]\{4\}:[0-9a-fA-F]\{4\}\]' | tail -n 1 | tr -d '[]')
+            local lspci_info=$(lspci -nns "$pci_slot" 2>/dev/null || true)
+            [[ -z "$lspci_info" ]] && continue
 
-        GPU_SLOTS+=("$slot")
-        GPU_DESCS+=("$desc")
-        GPU_IDS+=("$id")
-        GPU_GROUPS+=("$group")
+            local pci_class=$(lspci -s "$pci_slot" -vmm 2>/dev/null | awk -F':\t' '/^Class:/ {print $2}' || echo "Unknown")
+            local dev_type=$(classify_device "$pci_class")
 
-        echo -e "  [${BOLD}${idx}${RESET}] Slot ${BOLD}${slot}${RESET} (IOMMU Group ${group:-none}) [${id}]: ${desc}"
-        ((idx++))
-    done < <(lspci | grep -E '(VGA compatible controller|3D controller)')
+            # Filter out non-passthrough system bridges and root infrastructure
+            [[ "$dev_type" == "SYSTEM" ]] && continue
 
-    if ((${#GPU_SLOTS[@]} == 0)); then
-        msg_err "No VGA or 3D controllers detected."
+            local id=$(echo "$lspci_info" | grep -o '\[[0-9a-fA-F]\{4\}:[0-9a-fA-F]\{4\}\]' | tail -n 1 | tr -d '[]' || true)
+            local desc=$(lspci -s "$pci_slot" | sed -E 's/^[0-9a-fA-F:.]+[[:space:]]+[^:]+:[[:space:]]*//')
+
+            DEV_SLOTS+=("$short_slot")
+            DEV_TYPES+=("$dev_type")
+            DEV_DESCS+=("$desc")
+            DEV_IDS+=("$id")
+            DEV_GROUPS+=("$group_num")
+
+            local type_color=$(get_type_color "$dev_type")
+            echo -e "  [${BOLD}${idx}${RESET}] ${type_color}[${dev_type}]${RESET} Slot ${BOLD}${short_slot}${RESET} (IOMMU Grp ${group_num}) [${id}]: ${desc}"
+            ((idx++))
+        done
+    done
+
+    if ((${#DEV_SLOTS[@]} == 0)); then
+        msg_err "No passthrough-eligible devices detected."
         return 1
     fi
 
     echo ""
-    read -rp "Select a GPU to configure for passthrough [1-${#GPU_SLOTS[@]}]: " choice
-    if [[ ! "$choice" =~ ^[0-9]+$ ]] || ((choice < 1 || choice > ${#GPU_SLOTS[@]})); then
+    read -rp "Select a device to configure for passthrough [1-${#DEV_SLOTS[@]}]: " choice
+    if [[ ! "$choice" =~ ^[0-9]+$ ]] || ((choice < 1 || choice > ${#DEV_SLOTS[@]})); then
         msg_err "Invalid selection."
         return 1
     fi
 
     local sel_idx=$((choice - 1))
-    local sel_slot="${GPU_SLOTS[$sel_idx]}"
-    local sel_desc="${GPU_DESCS[$sel_idx]}"
-    local sel_id="${GPU_IDS[$sel_idx]}"
-    local sel_group="${GPU_GROUPS[$sel_idx]}"
+    local sel_slot="${DEV_SLOTS[$sel_idx]}"
+    local sel_type="${DEV_TYPES[$sel_idx]}"
+    local sel_desc="${DEV_DESCS[$sel_idx]}"
+    local sel_id="${DEV_IDS[$sel_idx]}"
+    local sel_group="${DEV_GROUPS[$sel_idx]}"
 
-    msg_info "Selected: ${sel_desc} (${sel_slot}) in Group ${sel_group}"
+    msg_info "Selected: [${sel_type}] ${sel_desc} (${sel_slot}) in IOMMU Group ${sel_group}"
 
-    # Check for companion devices (e.g. HDMI Audio on function .1)
-    local slot_base="${sel_slot%.*}" # e.g. 82:00
+    # Check for companion multi-function devices on the same physical slot (e.g. 82:00.1 audio or multi-port NIC)
+    local slot_base="${sel_slot%.*}"
     declare -a ALL_IDS=("$sel_id")
-    echo "Checking companion devices on slot ${slot_base}.*:"
+    echo "Checking companion functions on slot ${slot_base}.*:"
     while IFS= read -r companion; do
         [[ -z "$companion" ]] && continue
         local c_slot="${companion%% *}"
         local c_desc="${companion#* }"
-        local c_id
-        c_id=$(lspci -nns "$c_slot" | grep -o '\[[0-9a-fA-F]\{4\}:[0-9a-fA-F]\{4\}\]' | tail -n 1 | tr -d '[]')
-        echo -e "  -> Found companion: ${c_slot} [${c_id}] ${c_desc}"
+        local c_id=$(lspci -nns "$c_slot" | grep -o '\[[0-9a-fA-F]\{4\}:[0-9a-fA-F]\{4\}\]' | tail -n 1 | tr -d '[]')
+        echo -e "  -> Found companion function: ${c_slot} [${c_id}] ${c_desc}"
         ALL_IDS+=("$c_id")
     done < <(lspci | grep "^${slot_base}\." | grep -v "^${sel_slot}")
 
     # Check IOMMU Group Isolation
-    if [[ -n "$sel_group" && -d "/sys/kernel/iommu_groups/${sel_group}/devices" ]]; then
-        local group_devs
-        group_devs=$(find "/sys/kernel/iommu_groups/${sel_group}/devices/" -type l | wc -l)
+    if [[ -d "/sys/kernel/iommu_groups/${sel_group}/devices" ]]; then
+        local group_devs=$(find "/sys/kernel/iommu_groups/${sel_group}/devices/" -type l | wc -l)
         if ((group_devs > ${#ALL_IDS[@]})); then
-            msg_warn "IOMMU Group ${sel_group} contains OTHER devices not part of this GPU slot!"
-            echo "Other devices in Group ${sel_group}:"
+            msg_warn "IOMMU Group ${sel_group} contains OTHER devices not part of this device slot!"
+            echo "Devices sharing Group ${sel_group}:"
             for dev in "/sys/kernel/iommu_groups/${sel_group}/devices/"*; do
                 local d_name=$(basename "$dev")
                 lspci -s "$d_name"
             done
-            msg_warn "Passing through this device may require passing through all devices in the group or enabling PCIe ACS."
+            msg_warn "Note: Passing through this device may require passing through all devices in the group or using PCIe ACS override."
         else
-            msg_ok "IOMMU Group ${sel_group} is fully isolated for this GPU."
+            msg_ok "IOMMU Group ${sel_group} is fully isolated."
         fi
     fi
 
-    # Prompt profile name
-    local default_name
-    default_name=$(echo "$sel_desc" | grep -o -E '(GTX|RTX|RX|Arc)?[[:space:]]*[0-9]{3,4}[[:space:]]*[A-Za-z0-9]*' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' || echo "gpu")
+    # Suggested Profile Name based on classification and description
+    local default_name=""
+    if [[ "$sel_type" == "GPU" ]]; then
+        default_name=$(echo "$sel_desc" | grep -o -E '(GTX|RTX|RX|Arc)?[[:space:]]*[0-9]{3,4}[[:space:]]*[A-Za-z0-9]*' | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' || echo "gpu")
+    elif [[ "$sel_type" == "NETWORK" ]]; then
+        default_name=$(echo "$sel_desc" | grep -o -E '(10G|1G|Wi-Fi|Ethernet|[A-Za-z0-9]+)' | head -n 1 | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]' || echo "nic")
+    elif [[ "$sel_type" == "USB" ]]; then
+        default_name="usb-ctrl"
+    elif [[ "$sel_type" == "STORAGE" ]]; then
+        default_name="storage"
+    else
+        default_name="device"
+    fi
     [[ -z "$default_name" ]] && default_name="passthrough"
 
+    echo ""
     read -rp "Enter profile name [default: ${default_name}]: " profile_name
     profile_name="${profile_name:-$default_name}"
     profile_name=$(echo "$profile_name" | tr -cd 'a-zA-Z0-9_-')
 
-    read -rp "Enter profile description [default: GPU Passthrough ${profile_name}]: " profile_desc
-    profile_desc="${profile_desc:-GPU Passthrough ${profile_name}}"
+    local default_desc="${sel_type} Passthrough ${profile_name}"
+    read -rp "Enter profile description [default: ${default_desc}]: " profile_desc
+    profile_desc="${profile_desc:-$default_desc}"
 
     local joined_ids
     joined_ids=$(IFS=','; echo "${ALL_IDS[*]}")
@@ -324,6 +420,7 @@ cmd_add() {
 # Passthrough Profile: ${profile_name}
 # Generated by cachyos-vfio on $(date)
 PROFILE="${profile_name}"
+DEVICE_TYPE="${sel_type}"
 DESCRIPTION="${profile_desc}"
 PCI_IDS="${joined_ids}"
 ENABLED="yes"
@@ -333,17 +430,13 @@ EOF
 
     # Configure Limine commandline entries in /etc/default/limine
     msg_info "Updating ${LIMINE_DEFAULT} with KERNEL_CMDLINE entries..."
-    
-    # Read base cmdline from /proc/cmdline or existing default
     local base_cmdline
     base_cmdline=$(cat /proc/cmdline | sed -E 's/vfio-pci\.ids=[^ ]*//g' | sed -E 's/  +/ /g')
     local vfio_params="amd_iommu=on iommu=pt vfio-pci.ids=${joined_ids}"
 
-    # Append for every installed kernel
     for kDir in /usr/lib/modules/*; do
         [[ -f "${kDir}/pkgbase" ]] || continue
-        local kName
-        kName=$(cat "${kDir}/pkgbase")
+        local kName=$(cat "${kDir}/pkgbase")
         kName="${kName// /}"
         local key="KERNEL_CMDLINE[${kName}-vfio-${profile_name}]"
 
@@ -355,8 +448,8 @@ EOF
         msg_ok "Configured: ${key}"
     done
 
-    # If NVIDIA GPU, check if secondary and add to nvidia-utils exclusion
-    if [[ "$sel_desc" =~ (NVIDIA|GeForce) ]]; then
+    # ONLY IF GPU AND NVIDIA: Prompt for driver exclusion
+    if [[ "$sel_type" == "GPU" ]] && [[ "$sel_desc" =~ (NVIDIA|GeForce) ]]; then
         local pci_domain_bus="0000:${sel_slot}"
         echo ""
         read -rp "Is this GPU secondary (should it be excluded from host proprietary nvidia driver)? [Y/n]: " exclude_nvidia
@@ -444,7 +537,7 @@ cmd_install() {
 
     # 2. Seed default profiles if empty
     if [[ -z $(ls -A "$CONFIG_DIR" 2>/dev/null) ]]; then
-        msg_info "Seeding default GPU profiles from repository..."
+        msg_info "Seeding initial profiles from repository..."
         [[ -f "${SCRIPT_DIR}/profiles.d/1060.conf.example" ]] && cp "${SCRIPT_DIR}/profiles.d/1060.conf.example" "${CONFIG_DIR}/1060.conf"
         [[ -f "${SCRIPT_DIR}/profiles.d/5090.conf.example" ]] && cp "${SCRIPT_DIR}/profiles.d/5090.conf.example" "${CONFIG_DIR}/5090.conf"
         msg_ok "Created initial profiles in ${CONFIG_DIR}"
@@ -457,11 +550,7 @@ cmd_install() {
     fi
 
     # 4. Limine post-hook
-    msg_info "Deploying Limine post-hook to ${HOOK_TARGET}..."
-    mkdir -p "$(dirname "$HOOK_TARGET")"
-    cp "${SCRIPT_DIR}/95-vfio-entries" "$HOOK_TARGET"
-    chmod +x "$HOOK_TARGET"
-    msg_ok "Hook successfully installed at ${HOOK_TARGET}."
+    cmd_install_hook
 
     # 5. CLI executable symlink in /usr/local/bin
     mkdir -p /usr/local/bin
@@ -472,20 +561,29 @@ cmd_install() {
     msg_ok "Setup complete! You can now run 'cachyos-vfio' directly from any terminal."
 }
 
+cmd_install_hook() {
+    check_root
+    msg_info "Deploying Limine post-hook to ${HOOK_TARGET}..."
+    mkdir -p "$(dirname "$HOOK_TARGET")"
+    cp "${SCRIPT_DIR}/95-vfio-entries" "$HOOK_TARGET"
+    chmod +x "$HOOK_TARGET"
+    msg_ok "Hook successfully installed at ${HOOK_TARGET}."
+}
+
 # ==============================================================================
 # Help / Usage
 # ==============================================================================
 cmd_help() {
-    echo -e "${BOLD}cachyos-vfio${RESET} (v${VERSION}) - Dynamic VFIO Passthrough Manager for CachyOS / Limine"
+    echo -e "${BOLD}cachyos-vfio${RESET} (v${VERSION}) - Dynamic Device Passthrough Manager for CachyOS / Limine"
     echo ""
     echo -e "${BOLD}USAGE:${RESET}"
     echo "  cachyos-vfio <command>"
     echo ""
     echo -e "${BOLD}COMMANDS:${RESET}"
     echo "  check          Run pre-flight checks (CPU virtualization, IOMMU, Limine, modules)"
-    echo "  list-devices   Display all PCI devices and their corresponding IOMMU groups"
+    echo "  list-devices   Display all PCI devices, classifications, and IOMMU groups"
     echo "  status         Display current driver bindings, active cmdline, and configured profiles"
-    echo "  add            Interactive wizard to discover, isolate, and configure a new passthrough profile"
+    echo "  add            Interactive wizard to discover, classify, and configure a new passthrough profile"
     echo "  remove         Interactive removal of an existing passthrough profile"
     echo "  install        Deploy Limine hook, initialize /etc/vfio-passthrough.d, and link binary"
     echo "  help           Show this help message"

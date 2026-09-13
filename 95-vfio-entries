@@ -22,7 +22,7 @@ load_profile_file() {
     local file="$1"
     [[ -f "$file" ]] || return 0
     
-    local profile="" desc="" ids="" enabled="yes"
+    local profile="" dev_type="" desc="" ids="" enabled="yes"
     while IFS='=' read -r key val || [[ -n "$key" ]]; do
         key=$(echo "$key" | tr -d '[:space:]')
         val=$(echo "$val" | sed -e 's/^[[:space:]]*["'"'"']//' -e 's/["'"'"'][[:space:]]*$//')
@@ -30,6 +30,7 @@ load_profile_file() {
         
         case "$key" in
             PROFILE|profile|NAME|name) profile="$val" ;;
+            DEVICE_TYPE|device_type|TYPE|type) dev_type="$val" ;;
             DESCRIPTION|description|COMMENT|comment) desc="$val" ;;
             PCI_IDS|pci_ids|IDS|ids) ids="$val" ;;
             ENABLED|enabled) enabled="$val" ;;
@@ -37,7 +38,7 @@ load_profile_file() {
     done < "$file"
     
     if [[ "$enabled" =~ ^(yes|true|1)$ ]] && [[ -n "$profile" && -n "$ids" ]]; then
-        [[ -z "$desc" ]] && desc="GPU Passthrough ${profile}"
+        [[ -z "$desc" ]] && desc="${dev_type:-Device} Passthrough ${profile}"
         PROFILES+=("${profile}|${desc}|${ids}")
     fi
 }

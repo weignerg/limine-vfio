@@ -2,6 +2,7 @@
 # Passthrough profile for GeForce RTX 5090
 
 PROFILE="5090"
+DEVICE_TYPE="GPU"
 DESCRIPTION="GPU Passthrough RTX 5090"
 # GPU VGA (10de:2b85) + Audio (10de:22e8)
 PCI_IDS="10de:2b85,10de:22e8"

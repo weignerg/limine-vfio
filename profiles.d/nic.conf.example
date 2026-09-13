@@ -1,0 +1,9 @@
+# /etc/vfio-passthrough.d/nic.conf.example
+# Passthrough profile for a dedicated PCIe Network Interface Card (e.g. 10GbE NIC)
+
+PROFILE="10g-nic"
+DEVICE_TYPE="NETWORK"
+DESCRIPTION="Network Passthrough 10GbE"
+# Replace with target NIC PCI ID(s)
+PCI_IDS="1d6a:14c0"
+ENABLED="no"

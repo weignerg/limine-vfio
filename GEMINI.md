@@ -1,13 +1,13 @@
-# Project: nvidia-gpus (cachyos-dual-gpu-vfio)
+# Project: cachyos-vfio
 
 ## Overview
-This project manages, monitors, and automates dual-GPU configuration and VFIO passthrough on CachyOS (Arch Linux) using the Limine bootloader. The system runs an RTX 5090 (host) and a GTX 1060 (guest / secondary).
+`cachyos-vfio` is an automated, device-agnostic VFIO passthrough and hardware isolation management utility designed for CachyOS and Arch Linux systems using the **Limine** bootloader. It supports GPUs, Network adapters, USB controllers, Storage devices, Audio controllers, and Hardware Accelerators.
 
 The project includes the **`cachyos-vfio`** CLI utility and a dynamic post-hook script for `limine-entry-tool`.
 
-## Hardware Configuration
-- **RTX 5090 (`0000:81:00.0`):** Host primary GPU via proprietary `nvidia` driver (open-kernel).
-- **GTX 1060 (`0000:82:00.0`):** Secondary / passthrough GPU via `nouveau` (host) or `vfio-pci` (guest).
+## Hardware Configuration (Workstation Setup)
+- **Primary GPU (RTX 5090 - `0000:81:00.0`):** Host display and CUDA compute via proprietary `nvidia` driver.
+- **Secondary GPU (GTX 1060 - `0000:82:00.0`):** Host secondary display via `nouveau` or VM passthrough via `vfio-pci`.
   - Excluded from proprietary driver via `/etc/modprobe.d/nvidia-utils.conf` (`NVreg_ExcludedGpus=0000:82:00.0`).
   - Nouveau enabled via `/etc/modprobe.d/nouveau.conf`.
 
@@ -21,7 +21,7 @@ The project includes the **`cachyos-vfio`** CLI utility and a dynamic post-hook 
 
 ## CLI Commands
 - `cachyos-vfio check`: Pre-flight diagnostics (CPU virtualization, IOMMU, Limine, modules).
-- `cachyos-vfio list-devices`: Scans PCI devices, maps IOMMU groups, checks group isolation.
+- `cachyos-vfio list-devices`: Scans PCI devices, classifies device types, maps IOMMU groups, checks group isolation.
 - `cachyos-vfio status`: Displays active driver bindings, cmdline, and configured profiles.
 - `cachyos-vfio add`: Interactive wizard to select device, verify IOMMU group, configure profile & Limine.
 - `cachyos-vfio remove`: Removes a profile and cleans up Limine entries.
