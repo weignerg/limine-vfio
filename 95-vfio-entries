@@ -50,13 +50,9 @@ if [[ -d "$CONFIG_DIR" ]]; then
     done
 fi
 
-# 2. Fallback: if no drop-in profiles found, check legacy hardcoded profiles
+# 2. If no enabled profiles found, exit cleanly
 if ((${#PROFILES[@]} == 0)); then
-    # Default fallback profiles for existing setup
-    PROFILES+=(
-        "1060|GPU Passthrough 1060|10de:1c03,10de:10f1"
-        "5090|GPU Passthrough 5090|10de:2b85,10de:22e8"
-    )
+    exit 0
 fi
 
 # Iterate over all kernel directories in Limine ESP

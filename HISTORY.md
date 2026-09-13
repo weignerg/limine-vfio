@@ -36,5 +36,10 @@
 - **Shell Autocompletion:** Authored tab completion suites for Fish (`limine-vfio.fish`), Bash (`limine-vfio.bash`), and Zsh (`limine-vfio.zsh`), supporting dynamic profile name completion. Installed Fish completion to host environment.
 - **Manual Page:** Authored standard Unix manual page (`man/limine-vfio.1`) detailing syntax, commands, configuration files, and examples.
 - **CI/CD Pipeline:** Added GitHub Actions workflow (`.github/workflows/ci.yml`) for containerized Arch Linux package builds and `.SRCINFO` consistency verification.
-- **Package Integration:** Updated [`PKGBUILD`](file:///home/weignerg/nvidia-gpus/PKGBUILD) to install shell completions and the manual page, verified packaging with `makepkg`, and regenerated [`.SRCINFO`](file:///home/weignerg/nvidia-gpus/.SRCINFO).
+### Session 7: Edge-Case Hardening, Sibling Discovery & Sanitization
+- **Removed Hardcoded Fallbacks:** Stripped legacy hardcoded GTX 1060 / RTX 5090 fallback bindings from `95-vfio-entries` so clean third-party systems without configured profiles exit cleanly rather than registering foreign hardware.
+- **IOMMU Sibling Auto-Discovery in XML:** Enhanced `limine-vfio generate-xml` to inspect sysfs IOMMU groups when given raw PCI addresses, automatically pulling in companion functions (e.g. GPU audio) to prevent KVM "group is not viable" VM boot errors.
+- **Kernel Cmdline Sanitization:** Updated `cmd_add` to prioritize `/etc/kernel/cmdline` if present and rigorously de-duplicate existing IOMMU parameters (`amd_iommu=on`, `iommu=pt`) prior to generating Limine boot entries.
+- **Direct Argument Removal:** Updated `cmd_remove` to accept profile name arguments directly (`limine-vfio remove <profile>`).
+
 

@@ -442,8 +442,16 @@ EOF
 
     # Configure Limine commandline entries in /etc/default/limine
     msg_info "Updating ${LIMINE_DEFAULT} with KERNEL_CMDLINE entries..."
+    local raw_cmdline=""
+    if [[ -f /etc/kernel/cmdline ]] && [[ -s /etc/kernel/cmdline ]]; then
+        raw_cmdline=$(cat /etc/kernel/cmdline)
+    elif [[ -f /proc/cmdline ]]; then
+        raw_cmdline=$(cat /proc/cmdline)
+    fi
+
+    # Strip existing vfio and iommu parameters to prevent duplication
     local base_cmdline
-    base_cmdline=$(cat /proc/cmdline | sed -E 's/vfio-pci\.ids=[^ ]*//g' | sed -E 's/  +/ /g')
+    base_cmdline=$(echo "$raw_cmdline" | sed -E 's/(amd_iommu|intel_iommu|iommu|vfio-pci\.ids)=[^ ]*//g' | sed -E 's/  +/ /g' | xargs)
 
     # Detect or load IOMMU parameters
     local iommu_opts=""
@@ -514,28 +522,38 @@ cmd_remove() {
     check_root
     msg_header "Remove VFIO Passthrough Profile"
 
-    if [[ ! -d "$CONFIG_DIR" || -z $(ls -A "$CONFIG_DIR" 2>/dev/null) ]]; then
-        msg_err "No profiles found in ${CONFIG_DIR}."
-        return 1
+    local target="${1:-}"
+
+    if [[ -z "$target" ]]; then
+        if [[ ! -d "$CONFIG_DIR" || -z $(ls -A "$CONFIG_DIR"/*.conf 2>/dev/null) ]]; then
+            msg_err "No profiles found in ${CONFIG_DIR}."
+            return 1
+        fi
+
+        declare -a PROFILES=()
+        local idx=1
+        for conf in "$CONFIG_DIR"/*.conf; do
+            [[ -f "$conf" ]] || continue
+            local pName=$(basename "$conf" .conf)
+            PROFILES+=("$pName")
+            echo "  [${idx}] ${pName} (${conf})"
+            ((idx++))
+        done
+
+        read -rp "Select profile to remove [1-${#PROFILES[@]}]: " choice
+        if [[ ! "$choice" =~ ^[0-9]+$ ]] || ((choice < 1 || choice > ${#PROFILES[@]})); then
+            msg_err "Invalid selection."
+            return 1
+        fi
+
+        target="${PROFILES[$((choice - 1))]}"
     fi
 
-    declare -a PROFILES=()
-    local idx=1
-    for conf in "$CONFIG_DIR"/*.conf; do
-        [[ -f "$conf" ]] || continue
-        local pName=$(basename "$conf" .conf)
-        PROFILES+=("$pName")
-        echo "  [${idx}] ${pName} (${conf})"
-        ((idx++))
-    done
-
-    read -rp "Select profile to remove [1-${#PROFILES[@]}]: " choice
-    if [[ ! "$choice" =~ ^[0-9]+$ ]] || ((choice < 1 || choice > ${#PROFILES[@]})); then
-        msg_err "Invalid selection."
+    target=$(basename "$target" .conf)
+    if [[ ! -f "${CONFIG_DIR}/${target}.conf" ]]; then
+        msg_err "Profile '${target}' not found in ${CONFIG_DIR}."
         return 1
     fi
-
-    local target="${PROFILES[$((choice - 1))]}"
     rm -f "${CONFIG_DIR}/${target}.conf"
     msg_ok "Removed ${CONFIG_DIR}/${target}.conf"
 
@@ -629,8 +647,28 @@ cmd_generate_xml() {
         # Direct PCI address
         local pci_raw="$target"
         [[ ! "$pci_raw" =~ ^[0-9a-fA-F]{4}: ]] && pci_raw="0000:${pci_raw}"
-        PCI_ADDRESSES+=("$pci_raw")
+
+        # If device exists, include all devices in its IOMMU group so VM start succeeds
+        local sysfs_group="/sys/bus/pci/devices/${pci_raw}/iommu_group/devices"
+        if [[ -d "$sysfs_group" ]]; then
+            for sib in "$sysfs_group"/*; do
+                [[ -e "$sib" ]] && PCI_ADDRESSES+=("$(basename "$sib")")
+            done
+        else
+            PCI_ADDRESSES+=("$pci_raw")
+        fi
     fi
+
+    # De-duplicate while preserving order
+    declare -a UNIQUE_ADDRS=()
+    declare -A SEEN_ADDRS=()
+    for addr in "${PCI_ADDRESSES[@]}"; do
+        if [[ -z "${SEEN_ADDRS[$addr]:-}" ]]; then
+            SEEN_ADDRS["$addr"]=1
+            UNIQUE_ADDRS+=("$addr")
+        fi
+    done
+    PCI_ADDRESSES=("${UNIQUE_ADDRS[@]}")
 
     if (( ${#PCI_ADDRESSES[@]} == 0 )); then
         msg_err "No matching PCI devices found for: ${target}"
