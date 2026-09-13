@@ -1,0 +1,9 @@
+# /etc/vfio-passthrough.d/nvme.conf.example
+# Passthrough profile for a dedicated PCIe NVMe Solid State Drive / Controller
+
+PROFILE="nvme-drive"
+DEVICE_TYPE="STORAGE"
+DESCRIPTION="NVMe Storage Controller Passthrough"
+# Replace with target NVMe controller PCI ID(s)
+PCI_IDS="144d:a808"
+ENABLED="no"

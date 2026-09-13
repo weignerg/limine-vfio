@@ -2,7 +2,7 @@
 
 Dynamic PCI Device Passthrough Manager and Bootloader Hook for **Limine** on Arch Linux & CachyOS.
 
-`limine-vfio` (formerly `cachyos-vfio`) provides an automated, device-agnostic utility to manage PCI passthrough and hardware isolation. It automates hardware discovery, device classification, IOMMU isolation validation, dynamic Limine boot entry generation, and driver exclusion.
+`limine-vfio` is an automated, device-agnostic utility to manage PCI passthrough and hardware isolation. It automates hardware discovery, device classification, IOMMU isolation validation, dynamic Limine boot entry generation, and driver exclusion.
 
 It supports passing through **GPUs**, **Network Adapters (NICs)**, **USB Controllers**, **Storage Controllers (NVMe/SATA)**, **Audio Cards**, **Capture Cards**, and **Hardware Accelerators**.
 
@@ -10,15 +10,14 @@ It supports passing through **GPUs**, **Network Adapters (NICs)**, **USB Control
 
 ## Key Features & Safeguards
 
-- **Device Agnostic Classification:** Scans the PCI bus and classifies devices (`GPU`, `NETWORK`, `USB`, `STORAGE`, `CAPTURE`, `ACCELERATOR`, `AUDIO`, `SYSTEM`).
+- **Universal Device Classification:** Scans the PCI bus and classifies devices (`GPU`, `NETWORK`, `USB`, `STORAGE`, `CAPTURE`, `ACCELERATOR`, `AUDIO`, `SYSTEM`).
 - **Pre-Flight Environment Safeguards:**
   - **UEFI Mode Check:** Verifies the system is booted in UEFI mode (`/sys/firmware/efi`).
   - **Limine Bootloader Validation:** Verifies Limine bootloader configuration and entry tools are present.
   - **CPU Virtualization Validation:** Detects AMD-V (`svm`) or Intel VT-x (`vmx`) extensions.
   - **IOMMU Group Isolation Guard:** Checks for sibling devices sharing the same IOMMU group and warns if isolation could cause host instability.
-- **Dynamic Bootloader Entries:** Seamless post-hook (`95-vfio-entries`) integrates with `limine-entry-tool` and `limine-update` to generate kernel-specific passthrough boot options without touching default boots.
-- **Arch / AUR Ready:** Full `PKGBUILD`, `limine-vfio.install`, and `.SRCINFO` packaging.
-- **Backward Compatible:** Symlinked `cachyos-vfio` alias is maintained for existing setups.
+- **Dynamic Bootloader Entries:** Seamless post-hook (`95-vfio-entries`) integrates with `limine-entry-tool` and `limine-update` to generate kernel-specific passthrough boot options without modifying standard host boot entries.
+- **Arch / AUR Packaging:** Complete package build specification (`PKGBUILD`), install hooks (`limine-vfio.install`), and package metadata (`.SRCINFO`).
 
 ---
 
@@ -26,12 +25,69 @@ It supports passing through **GPUs**, **Network Adapters (NICs)**, **USB Control
 
 | Classification | Typical Devices | Companion & Isolation Logic |
 | :--- | :--- | :--- |
-| **`GPU`** | NVIDIA RTX / GTX, AMD Radeon, Intel Arc | Automatically pairs companion HDMI/DP audio controllers; prompts for host driver exclusion only if secondary NVIDIA. |
+| **`GPU`** | NVIDIA RTX / GTX, AMD Radeon, Intel Arc | Automatically pairs companion HDMI/DP audio controllers; prompts for host driver exclusion only if secondary NVIDIA GPU. |
 | **`NETWORK`** | 10GbE / 2.5GbE NICs, Wi-Fi 7 adapters | Groups multi-port companion interfaces on the same PCIe card. |
 | **`USB`** | Dedicated PCIe USB 3.x / Thunderbolt controllers | Isolates external host controllers for guest hotplugging. |
 | **`STORAGE`** | NVMe SSD controllers, dedicated SATA controllers | Isolates raw storage controllers for bare-metal guest I/O performance. |
 | **`CAPTURE`** | Video capture cards (Elgato, Blackmagic, AverMedia) | Isolates streaming and capture hardware for dedicated guest ingestion. |
 | **`ACCELERATOR`** | NPUs, TPUs, crypto accelerators, FPGAs | Dedicated compute and machine learning acceleration passthrough. |
+
+---
+
+## Real-World Passthrough Examples
+
+`limine-vfio` includes real-world profile templates based on tested workstation configurations:
+
+### 1. Dual-GPU Passthrough (Host Display & Compute + VM Isolated GPU)
+In a dual-GPU workstation (such as an **RTX 5090** primary and a **GTX 1060** secondary):
+- **Primary GPU (RTX 5090):** Retained by the host for desktop display (KDE Plasma / Wayland) and high-performance CUDA workloads via the proprietary `nvidia` driver.
+- **Secondary GPU (GTX 1060):** Isolated via `vfio-pci` along with its companion HDMI audio controller (`10de:10f1`).
+- **Driver Exclusion:** Automatically prompts to exclude the secondary GPU from the proprietary driver via `/etc/modprobe.d/nvidia-utils.conf` (`NVreg_ExcludedGpus=0000:82:00.0`), allowing `nouveau` fallback on standard boots or `vfio-pci` binding in passthrough boots.
+
+```ini
+# /etc/vfio-passthrough.d/1060.conf
+PROFILE="1060"
+DEVICE_TYPE="GPU"
+DESCRIPTION="GPU Passthrough GTX 1060"
+PCI_IDS="10de:1c03,10de:10f1"
+ENABLED="yes"
+```
+
+### 2. High-Speed Network Card Passthrough (10GbE NIC)
+Isolates a dedicated PCIe Ethernet or Wi-Fi controller for high-throughput VM routing (e.g. pfSense, OPNsense, or high-bandwidth lab VMs):
+
+```ini
+# /etc/vfio-passthrough.d/10g-nic.conf
+PROFILE="10g-nic"
+DEVICE_TYPE="NETWORK"
+DESCRIPTION="Network Passthrough 10GbE"
+PCI_IDS="1d6a:14c0"
+ENABLED="yes"
+```
+
+### 3. Dedicated PCIe USB Controller Passthrough
+Directly passes through a discrete PCIe USB controller into a guest VM, enabling latency-free physical hotplugging of VR headsets, flash drives, and external audio gear:
+
+```ini
+# /etc/vfio-passthrough.d/usb-controller.conf
+PROFILE="usb-ctrl"
+DEVICE_TYPE="USB"
+DESCRIPTION="USB Controller Passthrough"
+PCI_IDS="8086:1138"
+ENABLED="yes"
+```
+
+### 4. Direct NVMe Storage Controller Passthrough
+Passes through an entire PCIe NVMe solid-state controller directly to the guest VM, achieving native bare-metal read and write performance without hypervisor storage virtualization overhead:
+
+```ini
+# /etc/vfio-passthrough.d/nvme-drive.conf
+PROFILE="nvme-drive"
+DEVICE_TYPE="STORAGE"
+DESCRIPTION="NVMe Storage Controller Passthrough"
+PCI_IDS="144d:a808"
+ENABLED="yes"
+```
 
 ---
 
@@ -79,8 +135,6 @@ yay -S limine-vfio
 
 ## CLI Usage
 
-Both `limine-vfio` and `cachyos-vfio` can be used interchangeably.
-
 ### 1. Pre-Flight Check
 Verifies CPU virtualization, IOMMU status, initramfs modules, and Limine hook:
 ```bash
@@ -116,14 +170,7 @@ sudo limine-vfio remove
 ## Configuration Architecture
 
 ### Drop-in Profiles: `/etc/vfio-passthrough.d/`
-Each isolated device profile is stored as a `.conf` file. Example (`/etc/vfio-passthrough.d/1060.conf`):
-```ini
-PROFILE="1060"
-DEVICE_TYPE="GPU"
-DESCRIPTION="GPU Passthrough GTX 1060"
-PCI_IDS="10de:1c03,10de:10f1"
-ENABLED="yes"
-```
+Each isolated device profile is stored as a `.conf` file in `/etc/vfio-passthrough.d/`.
 
 ### Global Configuration: `/etc/vfio-passthrough.conf`
 Defines system-wide IOMMU settings. If unspecified, `limine-vfio` auto-detects CPU vendor (AMD-V vs Intel VT-d):
@@ -143,14 +190,14 @@ Runs automatically during kernel installations and updates (`limine-update` / `p
 ## Repository Files
 
 - [`limine-vfio`](./limine-vfio): Main management CLI executable.
-- [`cachyos-vfio`](./cachyos-vfio): Backward compatibility symlink.
 - [`95-vfio-entries`](./95-vfio-entries): Dynamic Limine post-hook script.
 - [`PKGBUILD`](./PKGBUILD): Arch Linux / AUR package build specification.
 - [`.SRCINFO`](./.SRCINFO): Generated Arch package metadata.
 - [`limine-vfio.install`](./limine-vfio.install): Pacman pre/post-install hooks and safety checks.
 - [`vfio-passthrough.conf.example`](./vfio-passthrough.conf.example): Global configuration template.
-- [`example-profile.conf`](./example-profile.conf): Template profile drop-in.
+- [`example-profile.conf`](./example-profile.conf): Generic template profile drop-in.
+- [`profiles.d/`](./profiles.d/): Real-world profile examples (`1060`, `5090`, `nic`, `usb`, `nvme`).
 - [`LICENSE`](./LICENSE): MIT License.
-- [`README.md`](./README.md): System documentation.
+- [`README.md`](./README.md): Complete system documentation and guides.
 - [`GEMINI.md`](./GEMINI.md): Project architecture and memory.
 - [`TODO.md`](./TODO.md): Session logs and task history.

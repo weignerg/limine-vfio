@@ -2,7 +2,7 @@
 # ==============================================================================
 # Limine Post-Hook: Dynamic VFIO Passthrough Boot Entry Generator
 # ==============================================================================
-# Managed by: cachyos-vfio
+# Managed by: limine-vfio
 # Scans configured profiles in /etc/vfio-passthrough.d/*.conf and registers
 # corresponding VFIO boot entries for every installed kernel in Limine.
 # ==============================================================================

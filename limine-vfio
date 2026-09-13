@@ -574,7 +574,6 @@ cmd_install() {
     # 4. CLI executable symlink in /usr/local/bin
     mkdir -p /usr/local/bin
     ln -sf "${SCRIPT_DIR}/limine-vfio" /usr/local/bin/limine-vfio
-    ln -sf "${SCRIPT_DIR}/limine-vfio" /usr/local/bin/cachyos-vfio
     msg_ok "Installed CLI binary symlink at /usr/local/bin/limine-vfio"
 
     echo ""

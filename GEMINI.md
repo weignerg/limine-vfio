@@ -1,9 +1,9 @@
-# Project: limine-vfio (formerly cachyos-vfio)
+# Project: limine-vfio
 
 ## Overview
 `limine-vfio` is an automated, device-agnostic VFIO passthrough and hardware isolation management utility designed for Arch Linux and CachyOS systems using the **Limine** bootloader. It supports GPUs, Network adapters, USB controllers, Storage devices, Audio controllers, and Hardware Accelerators.
 
-The project includes the **`limine-vfio`** CLI utility (with `cachyos-vfio` compatibility symlink), a dynamic post-hook script for `limine-entry-tool`, and Arch / AUR packaging files (`PKGBUILD`, `limine-vfio.install`, `.SRCINFO`).
+The project includes the **`limine-vfio`** CLI utility, a dynamic post-hook script for `limine-entry-tool`, and Arch / AUR packaging files (`PKGBUILD`, `limine-vfio.install`, `.SRCINFO`).
 
 ## Hardware Configuration (Workstation Setup)
 - **Primary GPU (RTX 5090 - `0000:81:00.0`):** Host display and CUDA compute via proprietary `nvidia` driver.
@@ -12,7 +12,7 @@ The project includes the **`limine-vfio`** CLI utility (with `cachyos-vfio` comp
   - Nouveau enabled via `/etc/modprobe.d/nouveau.conf`.
 
 ## Architecture & Configuration Files
-- **CLI Utility:** `/usr/bin/limine-vfio` and symlink `/usr/bin/cachyos-vfio` (or `/usr/local/bin/limine-vfio`).
+- **CLI Utility:** `/usr/bin/limine-vfio` (or `/usr/local/bin/limine-vfio`).
 - **Profiles Directory:** `/etc/vfio-passthrough.d/` (drop-in `.conf` files for each passthrough device).
 - **Global Config:** `/etc/vfio-passthrough.conf`.
 - **Limine Post-Hook:** `/etc/boot/hooks/post.d/95-vfio-entries` (scans `/etc/vfio-passthrough.d/` and registers boot entries for all kernels).

@@ -49,4 +49,11 @@
   - [x] Added interim installation callout in `README.md` explaining AUR registration suspension
   - [x] Documented native local installation via `makepkg -si`, prebuilt packages, and standalone scripts
   - [x] Synchronized documentation updates to GitHub remote
+- [x] **Task 17: Clean Up Legacy Nomenclature & Showcase History-Derived Examples**
+  - [x] Removed all former name mentions from documentation, code, and hook headers
+  - [x] Removed vestigial symlink from repository and package spec
+  - [x] Added "Real-World Passthrough Examples" section to `README.md` (Dual-GPU, 10GbE NIC, USB, NVMe)
+  - [x] Added `nvme.conf.example` to `profiles.d/`
+  - [x] Regenerated source checksums and `.SRCINFO`
+
 

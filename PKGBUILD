@@ -21,8 +21,8 @@ source=("limine-vfio"
         "vfio-passthrough.conf.example"
         "example-profile.conf"
         "LICENSE")
-sha256sums=('3e40a330a710e59a9c88f4e42e7557aa2a0549c1ff214b7046f0a0066488f39b'
-            '00a42b5a1ae5e9966424333986a7b54cc33408ca7566a72d8ee88a626ed2c2bd'
+sha256sums=('37be77c219ce0ec20527704d863a623be4e24a0c99b455d40e1a3d99b53f2370'
+            '5c5580d514fc6dbd03b1b3d9769564d798ca222958ec117cd8ae57090ec4eeaa'
             '02438e03bc29ccf9d8178a465d0981347e649bed8f0ef5ce38a3e872fa61ae60'
             'd29a0d4ac548ff10b4add8da243259b258961c502204e1633732dcd2f360e37d'
             '7f902bcc9bc916d46f0c46d642e2f37e878a464a89f7bc37b8eaa13e0830ae57')
@@ -30,9 +30,8 @@ sha256sums=('3e40a330a710e59a9c88f4e42e7557aa2a0549c1ff214b7046f0a0066488f39b'
 package() {
     cd "$srcdir"
 
-    # 1. Install CLI executable and backward-compatibility symlink
+    # 1. Install CLI executable
     install -Dm755 limine-vfio "${pkgdir}/usr/bin/limine-vfio"
-    ln -sf limine-vfio "${pkgdir}/usr/bin/cachyos-vfio"
 
     # 2. Install Limine post-hook
     install -Dm755 95-vfio-entries "${pkgdir}/etc/boot/hooks/post.d/95-vfio-entries"
