@@ -42,4 +42,17 @@
 - **Kernel Cmdline Sanitization:** Updated `cmd_add` to prioritize `/etc/kernel/cmdline` if present and rigorously de-duplicate existing IOMMU parameters (`amd_iommu=on`, `iommu=pt`) prior to generating Limine boot entries.
 - **Direct Argument Removal:** Updated `cmd_remove` to accept profile name arguments directly (`limine-vfio remove <profile>`).
 
+### Session 8: Local Pacman Deployment, Workstation Boot Cleanup & Conflict Doctor
+- **Local Pacman Installation:** Successfully compiled and installed `limine-vfio-1.0.0-1-any.pkg.tar.zst` via `pacman -U`, achieving full native package tracking on the host workstation.
+- **Workstation Boot Configuration Cleanup:**
+  - Resolved workstation boot conflict where primary host GPU (RTX 5090) had an active passthrough profile by disabling `/etc/vfio-passthrough.d/5090.conf` -> `5090.conf.disabled`.
+  - Purged orphan `KERNEL_CMDLINE[*-vfio-5090]` entries from `/etc/default/limine`.
+  - Configured active secondary GPU profile `/etc/vfio-passthrough.d/1060.conf` with `DEVICE_TYPE="GPU"` and companion audio pairing (`10de:1c03,10de:10f1`).
+  - Synchronized and rebuilt Limine boot menu entries across both installed kernels (`linux-cachyos-lts` and `linux-cachyos`) via `limine-update`.
+- **Boot Configuration Conflict Resolution Engine (`doctor`):**
+  - Built comprehensive conflict detection into `limine-vfio` (`check_conflicts`), integrated directly into `limine-vfio check` and dedicated `limine-vfio doctor` subcommand.
+  - Implemented automatic detection for: (1) enabled profiles isolating the primary display GPU (`boot_vga == 1`), (2) orphan Limine boot parameters whose profile drop-in no longer exists, (3) missing kernel command lines for enabled profiles across installed kernels, and (4) dangerous `vfio-pci.ids` parameters in default boot entries.
+  - Added interactive guided repair to cleanly disable conflicting profiles, purge orphan lines, generate missing parameters, and update the bootloader menu.
+- **Shell Completions & Man Page Updates:** Updated Fish, Bash, and Zsh completion files and Unix manual page (`man/limine-vfio.1`) with the `doctor` subcommand.
+
 

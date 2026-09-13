@@ -17,6 +17,7 @@ It supports passing through **GPUs**, **Network Adapters (NICs)**, **USB Control
   - **CPU Virtualization Validation:** Detects AMD-V (`svm`) or Intel VT-x (`vmx`) extensions.
   - **IOMMU Group Isolation Guard:** Checks for sibling devices sharing the same IOMMU group and warns if isolation could cause host instability.
 - **Dynamic Bootloader Entries:** Seamless post-hook (`95-vfio-entries`) integrates with `limine-entry-tool` and `limine-update` to generate kernel-specific passthrough boot options without modifying standard host boot entries.
+- **Bootloader Conflict Resolution Engine:** Includes `limine-vfio doctor` and built-in diagnostic guards in `limine-vfio check` to identify orphan boot parameters, missing kernel entries, or accidental host primary GPU isolation before rebooting.
 - **Libvirt XML Generation:** Generates valid `<hostdev>` blocks for VM domain XML (`virt-manager` / `virsh edit`).
 - **Shell Completions & Man Page:** Full tab autocompletion for Bash, Zsh, and Fish, plus comprehensive manual page (`man limine-vfio`).
 - **Arch / AUR Packaging:** Complete package build specification (`PKGBUILD`), install hooks (`limine-vfio.install`), and package metadata (`.SRCINFO`).
@@ -175,6 +176,18 @@ limine-vfio generate-xml 1060
 
 # Or generate XML directly for any PCI address
 limine-vfio generate-xml 82:00.0
+```
+
+### 7. Configuration Conflict Detection & Auto-Repair ("Doctor")
+Scans `/etc/default/limine` and active profiles for potential bootloader conflicts:
+- Detects if an enabled profile mistakenly isolates the **primary display GPU** (`boot_vga == 1`), preventing host desktop lockout.
+- Detects orphan `KERNEL_CMDLINE[*-vfio-*]` parameters for deleted or renamed profiles.
+- Detects missing command line entries for newly enabled profiles across all installed kernels.
+- Detects dangerous `vfio-pci.ids` parameters in `KERNEL_CMDLINE[default]` that would isolate hardware on standard host boots.
+- Interactively assists with automatic conflict resolution, profile disabling, parameter cleanup, and boot menu rebuilding.
+```bash
+# Run conflict diagnostics and guided resolution
+sudo limine-vfio doctor
 ```
 
 ---

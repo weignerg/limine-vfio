@@ -34,6 +34,9 @@ Interactively or by argument removes a configured profile, cleans up correspondi
 .B generate-xml \fR[\fIPROFILE\fR | \fIPCI_ADDRESS\fR] \fR(aliases: \fBxml\fR, \fBvirt-xml\fR)
 Outputs formatted libvirt \fB<hostdev>\fR XML blocks for the specified profile or PCI device (e.g., \fI82:00.0\fR). Output is ready to paste directly into \fBvirt-manager\fR or \fBvirsh edit\fR.
 .TP
+.B doctor \fR(aliases: \fBfix\fR, \fBconflicts\fR)
+Scans for bootloader and configuration conflicts (such as orphan Limine entries, missing kernel parameters for enabled profiles, or accidental isolation of the primary host display GPU) and provides interactive, automated conflict resolution and bootloader synchronization.
+.TP
 .B install \fR(aliases: \fBsetup\fR)
 Manual installation routine deploying the post-hook to \fI/etc/boot/hooks/post.d/95-vfio-entries\fR, initializing configuration directories, and creating binary symlinks. (Used when not installing via Arch package manager).
 .TP

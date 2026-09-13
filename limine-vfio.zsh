@@ -9,6 +9,7 @@ _limine_vfio() {
         'add:Interactive wizard to discover, classify, and configure a new passthrough profile'
         'remove:Interactive removal of an existing passthrough profile'
         'generate-xml:Generate libvirt <hostdev> XML block for virt-manager/virsh'
+        'doctor:Check and resolve boot menu and configuration conflicts'
         'install:Deploy Limine hook, initialize /etc/vfio-passthrough.d, and link binary'
         'help:Show help message'
     )

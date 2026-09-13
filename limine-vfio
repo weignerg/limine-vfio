@@ -167,11 +167,186 @@ cmd_check() {
         msg_info "${CONFIG_DIR} does not exist yet. Run 'limine-vfio install' or 'limine-vfio add' to configure."
     fi
 
+    # 8. Boot Configuration & Conflict Check
+    check_conflicts "${1:-no}"
+
     echo ""
     if ((has_errors == 0)); then
         msg_ok "System is ready for VFIO passthrough configuration!"
     else
         msg_err "Some prerequisites are missing. Please review the warnings above."
+    fi
+}
+
+# ==============================================================================
+# Conflict Detection & Resolution Assistant
+# ==============================================================================
+check_conflicts() {
+    local auto_prompt="${1:-yes}"
+    local conflicts_found=0
+    local -a ORPHAN_KEYS=()
+    local -a MISSING_KEYS=()
+    local -a PRIMARY_GPU_PROFILES=()
+
+    echo -n "Checking boot menu & kernel command-line conflicts: "
+
+    # 1. Check if KERNEL_CMDLINE[default] contains vfio-pci.ids
+    if [[ -f "$LIMINE_DEFAULT" ]] && grep -F "KERNEL_CMDLINE[default]" "$LIMINE_DEFAULT" 2>/dev/null | grep -q 'vfio-pci\.ids='; then
+        conflicts_found=$((conflicts_found + 1))
+        echo ""
+        msg_err "CRITICAL: KERNEL_CMDLINE[default] in ${LIMINE_DEFAULT} contains 'vfio-pci.ids'. This isolates devices on EVERY boot, preventing standard desktop use!"
+    fi
+
+    # 2. Find Primary Display GPU (boot_vga == 1)
+    local primary_gpu_pci=""
+    local primary_gpu_id=""
+    for dev in /sys/bus/pci/devices/*; do
+        if [[ -f "$dev/boot_vga" ]] && [[ $(cat "$dev/boot_vga" 2>/dev/null) == "1" ]]; then
+            primary_gpu_pci=$(basename "$dev")
+            primary_gpu_id=$(lspci -nns "$primary_gpu_pci" 2>/dev/null | grep -o '\[[0-9a-fA-F]\{4\}:[0-9a-fA-F]\{4\}\]' | tail -n 1 | tr -d '[]')
+            break
+        fi
+    done
+
+    # 3. Check profiles in /etc/vfio-passthrough.d
+    declare -A ACTIVE_PROFILES=()
+    if [[ -d "$CONFIG_DIR" ]]; then
+        for conf in "$CONFIG_DIR"/*.conf; do
+            [[ -f "$conf" ]] || continue
+            local p_name="" p_enabled="yes" p_ids=""
+            while IFS='=' read -r k v || [[ -n "$k" ]]; do
+                k=$(echo "$k" | tr -d '[:space:]')
+                v=$(echo "$v" | sed -e 's/^[[:space:]]*["'"'"']//' -e 's/["'"'"'][[:space:]]*$//')
+                case "$k" in
+                    PROFILE|profile) p_name="$v" ;;
+                    ENABLED|enabled) p_enabled="$v" ;;
+                    PCI_IDS|pci_ids) p_ids="$v" ;;
+                esac
+            done < "$conf"
+
+            local bName=$(basename "$conf" .conf)
+            p_name="${p_name:-$bName}"
+            ACTIVE_PROFILES["$p_name"]="$p_enabled"
+
+            # Check if enabled profile targets primary display GPU
+            if [[ -n "$primary_gpu_id" && "$p_ids" =~ $primary_gpu_id ]] && [[ "$p_enabled" =~ ^(yes|true|1)$ ]]; then
+                PRIMARY_GPU_PROFILES+=("$p_name")
+                conflicts_found=$((conflicts_found + 1))
+            fi
+
+            # Check if enabled profile has corresponding KERNEL_CMDLINE entries for installed kernels
+            if [[ "$p_enabled" =~ ^(yes|true|1)$ && -f "$LIMINE_DEFAULT" ]]; then
+                for kDir in /usr/lib/modules/*; do
+                    [[ -f "${kDir}/pkgbase" ]] || continue
+                    local kName=$(cat "${kDir}/pkgbase" | tr -d '[:space:]')
+                    local expected_key="KERNEL_CMDLINE[${kName}-vfio-${p_name}]"
+                    if ! grep -F -q "${expected_key}=" "$LIMINE_DEFAULT" 2>/dev/null; then
+                        MISSING_KEYS+=("${kName}|${p_name}|${p_ids}")
+                        conflicts_found=$((conflicts_found + 1))
+                    fi
+                done
+            fi
+        done
+    fi
+
+    # 4. Check for orphan KERNEL_CMDLINE entries in /etc/default/limine
+    if [[ -f "$LIMINE_DEFAULT" ]]; then
+        while IFS= read -r line; do
+            local key=$(echo "$line" | cut -d'=' -f1)
+            if [[ "$key" =~ ^KERNEL_CMDLINE\[(.*)-vfio-(.*)\]$ ]]; then
+                local k_target="${BASH_REMATCH[1]}"
+                local p_target="${BASH_REMATCH[2]}"
+                if [[ -z "${ACTIVE_PROFILES[$p_target]:-}" ]]; then
+                    ORPHAN_KEYS+=("$key")
+                    conflicts_found=$((conflicts_found + 1))
+                fi
+            fi
+        done < <(grep -E '^KERNEL_CMDLINE\[.*-vfio-.*\]=' "$LIMINE_DEFAULT" 2>/dev/null || true)
+    fi
+
+    if ((conflicts_found == 0)); then
+        msg_ok "No conflicts detected in Limine boot configuration."
+        return 0
+    fi
+
+    echo ""
+    msg_warn "Detected ${conflicts_found} potential configuration conflict(s):"
+
+    for p in "${PRIMARY_GPU_PROFILES[@]}"; do
+        msg_warn "  * Profile '${p}' targets Primary Host Display GPU (${primary_gpu_pci} [${primary_gpu_id}])."
+        echo "    -> Booting into this entry will disconnect your host desktop monitor session."
+    done
+
+    for orph in "${ORPHAN_KEYS[@]}"; do
+        msg_warn "  * Orphan boot parameter in ${LIMINE_DEFAULT}: ${orph}"
+        echo "    -> Profile drop-in '${orph}' no longer exists in ${CONFIG_DIR}/."
+    done
+
+    for miss in "${MISSING_KEYS[@]}"; do
+        IFS='|' read -r k_t p_t p_ids <<< "$miss"
+        msg_warn "  * Missing boot parameter for installed kernel '${k_t}': KERNEL_CMDLINE[${k_t}-vfio-${p_t}]"
+        echo "    -> Profile '${p_t}' is enabled but kernel '${k_t}' will boot without passthrough flags."
+    done
+
+    # If auto_prompt is 'no', do not prompt interactively (e.g. during simple check)
+    if [[ "$auto_prompt" == "no" ]]; then
+        echo ""
+        msg_info "Run 'sudo limine-vfio doctor' to automatically resolve these conflicts."
+        return 0
+    fi
+
+    echo ""
+    read -rp "Would you like limine-vfio to assist in resolving these conflicts? [Y/n]: " resolve_choice
+    [[ "$resolve_choice" =~ ^[Nn]$ ]] && return 0
+
+    check_root
+
+    # Fix 1: Primary GPU profiles
+    for p in "${PRIMARY_GPU_PROFILES[@]}"; do
+        echo ""
+        read -rp "Disable profile '${p}' to prevent accidental host display lockout? [Y/n]: " dis_choice
+        if [[ ! "$dis_choice" =~ ^[Nn]$ ]]; then
+            sed -i 's/^ENABLED=.*/ENABLED="no"/' "${CONFIG_DIR}/${p}.conf"
+            sed -i "/-vfio-${p}\]/d" "$LIMINE_DEFAULT"
+            msg_ok "Disabled profile '${p}' in ${CONFIG_DIR} and removed boot entry."
+        fi
+    done
+
+    # Fix 2: Orphan keys
+    for orph in "${ORPHAN_KEYS[@]}"; do
+        sed -i "s|^${orph}=.*||" "$LIMINE_DEFAULT"
+        sed -i '/^$/d' "$LIMINE_DEFAULT"
+        msg_ok "Removed orphan parameter: ${orph}"
+    done
+
+    # Fix 3: Missing keys
+    if ((${#MISSING_KEYS[@]} > 0)); then
+        local raw_cmd=""
+        if [[ -f /etc/kernel/cmdline ]] && [[ -s /etc/kernel/cmdline ]]; then
+            raw_cmd=$(cat /etc/kernel/cmdline)
+        else
+            raw_cmd=$(cat /proc/cmdline)
+        fi
+        local b_cmd=$(echo "$raw_cmd" | sed -E 's/(amd_iommu|intel_iommu|iommu|vfio-pci\.ids)=[^ ]*//g' | sed -E 's/  +/ /g' | xargs)
+
+        local i_opts="amd_iommu=on iommu=pt"
+        grep -q "GenuineIntel" /proc/cpuinfo 2>/dev/null && i_opts="intel_iommu=on iommu=pt"
+
+        for miss in "${MISSING_KEYS[@]}"; do
+            IFS='|' read -r k_t p_t p_ids <<< "$miss"
+            local full_key="KERNEL_CMDLINE[${k_t}-vfio-${p_t}]"
+            local full_val="${b_cmd} ${i_opts} vfio-pci.ids=${p_ids}"
+            echo "${full_key}=${full_val}" >> "$LIMINE_DEFAULT"
+            msg_ok "Generated missing parameter: ${full_key}"
+        done
+    fi
+
+    echo ""
+    read -rp "Rebuild Limine bootloader menu now with limine-update? [Y/n]: " update_choice
+    if [[ ! "$update_choice" =~ ^[Nn]$ ]]; then
+        msg_info "Running limine-update..."
+        limine-update
+        msg_ok "Bootloader menu successfully synchronized and resolved!"
     fi
 }
 
@@ -759,6 +934,7 @@ cmd_help() {
     echo "  add            Interactive wizard to discover, classify, and configure a new passthrough profile"
     echo "  remove         Interactive removal of an existing passthrough profile"
     echo "  generate-xml   Generate libvirt <hostdev> XML block for virt-manager/virsh"
+    echo "  doctor         Check and automatically resolve boot menu and configuration conflicts"
     echo "  install        Deploy Limine hook, initialize /etc/vfio-passthrough.d, and link binary"
     echo "  help           Show this help message"
     echo ""
@@ -777,6 +953,7 @@ main() {
         add)          cmd_add "$@" ;;
         remove)       cmd_remove "$@" ;;
         generate-xml|xml|virt-xml) cmd_generate_xml "$@" ;;
+        doctor|fix|conflicts|check-conflicts) check_conflicts "yes" ;;
         install|install-hook|setup) cmd_install "$@" ;;
         help|--help|-h) cmd_help ;;
         *)

@@ -13,6 +13,7 @@ complete -c limine-vfio -n "__fish_use_subcommand" -a status -d "Display active 
 complete -c limine-vfio -n "__fish_use_subcommand" -a add -d "Interactive wizard to configure a new passthrough profile"
 complete -c limine-vfio -n "__fish_use_subcommand" -a remove -d "Remove an existing passthrough profile"
 complete -c limine-vfio -n "__fish_use_subcommand" -a generate-xml -d "Generate libvirt <hostdev> XML block for virt-manager/virsh"
+complete -c limine-vfio -n "__fish_use_subcommand" -a doctor -d "Check and resolve boot menu and configuration conflicts"
 complete -c limine-vfio -n "__fish_use_subcommand" -a install -d "Deploy Limine hook, initialize directories, and link binary"
 complete -c limine-vfio -n "__fish_use_subcommand" -a help -d "Show help information"
 

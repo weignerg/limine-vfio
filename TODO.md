@@ -1,9 +1,9 @@
 # limine-vfio: Remaining Tasks & Roadmap
 
 ## 1. System Integration & Verification (Local Host)
-- [ ] **Install via native `pacman`:** Run `makepkg -si` locally to transition the system from loose file symlinks to full pacman database tracking (`pacman -Q limine-vfio`).
+- [x] **Install via native `pacman`:** Installed `limine-vfio` via `pacman -U` with full system package tracking (`pacman -Q limine-vfio`).
 - [ ] **End-to-End VM Passthrough Test:** Boot a test KVM/QEMU virtual machine attaching the GTX 1060 (`82:00.0` and `82:00.1`) using the generated libvirt XML to confirm zero host-driver contention and clean guest initialization.
-- [ ] **Multi-Kernel Boot Verification:** Verify boot entries appear and load properly across all installed kernels (e.g. `linux-cachyos-lts` and standard kernels).
+- [x] **Multi-Kernel Boot Verification:** Verified boot entries appear and synchronize properly across all installed kernels (`linux-cachyos-lts` and `linux-cachyos`).
 
 ## 2. AUR & Upstream Distribution
 - [ ] **Monitor AUR Registrations:** Check [aur.archlinux.org](https://aur.archlinux.org/) for the reopening of new maintainer account registrations.
@@ -22,6 +22,7 @@
 - [ ] **Repository Visibility:** Evaluate making the GitHub repository public when ready for broader community adoption.
 
 ## 4. Completed Feature Enhancements
+- [x] **Boot Configuration Conflict Resolution Engine (`doctor`):** Built automated diagnostics and resolution in `limine-vfio doctor` and `limine-vfio check` for orphan parameters, missing kernel entries, and primary GPU lockout.
 - [x] **Libvirt XML Generation:** Implemented `limine-vfio generate-xml <profile>` subcommand to automatically output formatted `<hostdev>` XML blocks ready to paste into `virt-manager` or `virsh edit`.
 - [x] **Shell Autocompletion:** Authored autocompletion scripts for Bash, Zsh, and Fish shells (`limine-vfio.bash`, `limine-vfio.zsh`, `limine-vfio.fish`), installed to system package directories and host Fish environment.
 - [x] **Manual Page:** Authored standard Unix manual page (`man/limine-vfio.1`) and added installation to `/usr/share/man/man1/` in PKGBUILD.

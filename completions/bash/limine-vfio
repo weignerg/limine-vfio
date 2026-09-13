@@ -4,7 +4,7 @@ _limine_vfio() {
     local cur prev words cword
     _init_completion || return
 
-    local commands="check list-devices status add remove generate-xml install help"
+    local commands="check list-devices status add remove generate-xml doctor install help"
 
     if [[ $cword -eq 1 ]]; then
         COMPREPLY=( $(compgen -W "${commands}" -- "${cur}") )
