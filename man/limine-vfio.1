@@ -1,0 +1,108 @@
+.TH LIMINE-VFIO 1 "September 2026" "limine-vfio 1.0.0" "User Commands"
+.SH NAME
+limine-vfio \- dynamic PCI device passthrough manager for the Limine bootloader
+.SH SYNOPSIS
+.B limine-vfio
+\fICOMMAND\fR [\fIARGUMENTS\fR]
+.SH DESCRIPTION
+.B limine-vfio
+is an automated, device-agnostic VFIO passthrough and hardware isolation management utility designed for Arch Linux and CachyOS systems utilizing the
+.B Limine
+bootloader.
+.PP
+It automates PCI device discovery, automatic hardware classification, IOMMU group isolation checks, modular profile management, dynamic Limine boot entry generation, host driver exclusion, and libvirt XML snippet generation.
+.PP
+Supported hardware categories include Graphics Processing Units (GPUs), Network Interface Cards (NICs), PCIe USB controllers, NVMe/SATA storage controllers, Audio controllers, Video capture cards, and Hardware Accelerators (TPUs, NPUs, FPGAs).
+
+.SH COMMANDS
+.TP
+.B check
+Performs pre-flight system checks, verifying CPU virtualization (AMD-V / Intel VT-x), IOMMU kernel status, initramfs module configuration (/etc/mkinitcpio.conf), Limine bootloader tools, and post-hook deployment.
+.TP
+.B list-devices \fR(aliases: \fBlist\fR, \fBdevices\fR)
+Displays a colorized table of all detected PCI devices, their classifications (GPU, NETWORK, USB, STORAGE, CAPTURE, ACCELERATOR, AUDIO, SYSTEM), vendor/device PCI IDs, active driver bindings, and IOMMU group mappings.
+.TP
+.B status
+Displays current kernel command-line parameters, active \fBvfio-pci\fR driver bindings in the running session, and all configured profiles in \fI/etc/vfio-passthrough.d/\fR.
+.TP
+.B add
+Runs an interactive wizard guiding the user through device selection, companion function pairing (e.g. HDMI audio controllers on GPUs), IOMMU group isolation verification, drop-in profile creation in \fI/etc/vfio-passthrough.d/<profile>.conf\fR, kernel command-line registration in \fI/etc/default/limine\fR, secondary NVIDIA driver exclusion, and bootloader menu regeneration via \fBlimine-update\fR.
+.TP
+.B remove \fR[\fIPROFILE\fR]
+Interactively or by argument removes a configured profile, cleans up corresponding entries from \fI/etc/default/limine\fR, and triggers \fBlimine-update\fR.
+.TP
+.B generate-xml \fR[\fIPROFILE\fR | \fIPCI_ADDRESS\fR] \fR(aliases: \fBxml\fR, \fBvirt-xml\fR)
+Outputs formatted libvirt \fB<hostdev>\fR XML blocks for the specified profile or PCI device (e.g., \fI82:00.0\fR). Output is ready to paste directly into \fBvirt-manager\fR or \fBvirsh edit\fR.
+.TP
+.B install \fR(aliases: \fBsetup\fR)
+Manual installation routine deploying the post-hook to \fI/etc/boot/hooks/post.d/95-vfio-entries\fR, initializing configuration directories, and creating binary symlinks. (Used when not installing via Arch package manager).
+.TP
+.B help \fR(aliases: \fB--help\fR, \fB-h\fR)
+Displays command-line usage and available subcommands.
+
+.SH CONFIGURATION FILES
+.TP
+.I /etc/vfio-passthrough.d/*.conf
+Drop-in device configuration files. Each file defines:
+.RS
+.B PROFILE
+- Unique profile identifier.
+.br
+.B DEVICE_TYPE
+- Device category (GPU, NETWORK, USB, STORAGE, etc.).
+.br
+.B DESCRIPTION
+- Human-readable description.
+.br
+.B PCI_IDS
+- Comma-separated list of vendor:device IDs to bind to \fBvfio-pci\fR.
+.br
+.B ENABLED
+- Enable/disable toggle (\fIyes\fR / \fIno\fR).
+.RE
+.TP
+.I /etc/vfio-passthrough.conf
+Global configuration defining system-wide IOMMU kernel parameters (\fIIOMMU_PARAMS\fR). If omitted, CPU vendor parameters are auto-detected.
+.TP
+.I /etc/boot/hooks/post.d/95-vfio-entries
+Dynamic Limine post-hook script executed by \fBlimine-update\fR to generate kernel passthrough boot entries.
+
+.SH SAFEGUARDS
+The utility checks for:
+.IP \(bu 2
+UEFI boot mode (\fI/sys/firmware/efi\fR).
+.IP \(bu 2
+Hardware CPU virtualization flags (\fIvmx\fR or \fIsvm\fR in \fI/proc/cpuinfo\fR).
+.IP \(bu 2
+Active Limine configuration (\fI/boot/limine.conf\fR).
+.IP \(bu 2
+IOMMU grouping isolation to warn against isolating devices that share groups with critical host controllers.
+
+.SH EXAMPLES
+.B limine-vfio check
+.RS
+Verify system readiness for VFIO passthrough.
+.RE
+.PP
+.B limine-vfio list-devices
+.RS
+List and classify all PCI devices with their IOMMU groups.
+.RE
+.PP
+.B sudo limine-vfio add
+.RS
+Launch interactive configuration wizard.
+.RE
+.PP
+.B limine-vfio generate-xml 1060
+.RS
+Output libvirt hostdev XML for the '1060' profile.
+.RE
+
+.SH SEE ALSO
+.BR lspci (8),
+.BR virsh (1),
+.BR mkinitcpio (8)
+
+.SH AUTHOR
+Gregory Allen Weigner <29870826+weignerg@users.noreply.github.com>

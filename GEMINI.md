@@ -27,4 +27,5 @@ The project includes the **`limine-vfio`** CLI utility, a dynamic post-hook scri
 - `limine-vfio status`: Displays active driver bindings, cmdline, and configured profiles.
 - `limine-vfio add`: Interactive wizard to select device, verify IOMMU group, configure profile & Limine.
 - `limine-vfio remove`: Removes a profile and cleans up Limine entries.
+- `limine-vfio generate-xml`: Outputs libvirt hostdev XML for virt-manager/virsh.
 - `limine-vfio install`: Deploys hook, initializes directories, and symlinks binary.

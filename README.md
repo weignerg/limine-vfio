@@ -17,6 +17,8 @@ It supports passing through **GPUs**, **Network Adapters (NICs)**, **USB Control
   - **CPU Virtualization Validation:** Detects AMD-V (`svm`) or Intel VT-x (`vmx`) extensions.
   - **IOMMU Group Isolation Guard:** Checks for sibling devices sharing the same IOMMU group and warns if isolation could cause host instability.
 - **Dynamic Bootloader Entries:** Seamless post-hook (`95-vfio-entries`) integrates with `limine-entry-tool` and `limine-update` to generate kernel-specific passthrough boot options without modifying standard host boot entries.
+- **Libvirt XML Generation:** Generates valid `<hostdev>` blocks for VM domain XML (`virt-manager` / `virsh edit`).
+- **Shell Completions & Man Page:** Full tab autocompletion for Bash, Zsh, and Fish, plus comprehensive manual page (`man limine-vfio`).
 - **Arch / AUR Packaging:** Complete package build specification (`PKGBUILD`), install hooks (`limine-vfio.install`), and package metadata (`.SRCINFO`).
 
 ---
@@ -163,6 +165,16 @@ sudo limine-vfio add
 Interactively removes a profile, cleans up `/etc/default/limine`, and refreshes boot entries:
 ```bash
 sudo limine-vfio remove
+```
+
+### 6. Generate Libvirt XML (<hostdev>) Snippets
+Automatically generates formatted libvirt XML blocks for any configured profile or PCI address, ready to paste directly into `virt-manager` (XML tab) or `virsh edit <vm>`:
+```bash
+# Generate XML from a configured profile
+limine-vfio generate-xml 1060
+
+# Or generate XML directly for any PCI address
+limine-vfio generate-xml 82:00.0
 ```
 
 ---

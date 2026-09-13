@@ -552,6 +552,122 @@ cmd_remove() {
 }
 
 # ==============================================================================
+# Generate Libvirt Hostdev XML
+# ==============================================================================
+cmd_generate_xml() {
+    local target="${1:-}"
+    msg_header "Libvirt Passthrough XML Generator"
+
+    # If no target passed, prompt user to choose from existing profiles or raw device
+    if [[ -z "$target" ]]; then
+        declare -a PROFILES=()
+        local idx=1
+        echo "Available Passthrough Profiles:"
+        if [[ -d "$CONFIG_DIR" && -n $(ls -A "$CONFIG_DIR"/*.conf 2>/dev/null) ]]; then
+            for conf in "$CONFIG_DIR"/*.conf; do
+                [[ -f "$conf" ]] || continue
+                local pName=$(basename "$conf" .conf)
+                PROFILES+=("$pName")
+                echo "  [${idx}] Profile: ${pName} (${conf})"
+                ((idx++))
+            done
+        fi
+        if (( ${#PROFILES[@]} == 0 )); then
+            msg_warn "No profiles found in ${CONFIG_DIR}."
+            read -rp "Enter PCI bus address (e.g. 82:00.0) or profile name: " target
+        else
+            echo "  [m] Enter manual PCI address (e.g. 82:00.0)"
+            read -rp "Select option [1-${#PROFILES[@]}, or m]: " choice
+            if [[ "$choice" =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= ${#PROFILES[@]})); then
+                target="${PROFILES[$((choice - 1))]}"
+            else
+                read -rp "Enter PCI bus address (e.g. 82:00.0): " target
+            fi
+        fi
+    fi
+
+    [[ -z "$target" ]] && { msg_err "No profile or device specified."; return 1; }
+
+    # Check if target is a profile file or profile name
+    local conf_file=""
+    if [[ -f "$target" ]]; then
+        conf_file="$target"
+    elif [[ -f "${CONFIG_DIR}/${target}.conf" ]]; then
+        conf_file="${CONFIG_DIR}/${target}.conf"
+    elif [[ -f "${CONFIG_DIR}/${target}" ]]; then
+        conf_file="${CONFIG_DIR}/${target}"
+    fi
+
+    declare -a PCI_ADDRESSES=()
+    local profile_title="${target}"
+    local profile_desc=""
+
+    if [[ -n "$conf_file" ]]; then
+        local p_name="" p_ids=""
+        while IFS='=' read -r key val || [[ -n "$key" ]]; do
+            key=$(echo "$key" | tr -d '[:space:]')
+            val=$(echo "$val" | sed -e 's/^[[:space:]]*["'"'"']//' -e 's/["'"'"'][[:space:]]*$//')
+            case "$key" in
+                PROFILE|profile) p_name="$val" ;;
+                DESCRIPTION|description) profile_desc="$val" ;;
+                PCI_IDS|pci_ids) p_ids="$val" ;;
+            esac
+        done < "$conf_file"
+
+        profile_title="${p_name:-$target}"
+        IFS=',' read -ra ID_ARRAY <<< "$p_ids"
+        for id in "${ID_ARRAY[@]}"; do
+            id=$(echo "$id" | tr -d '[:space:]')
+            [[ -z "$id" ]] && continue
+            while IFS= read -r line; do
+                [[ -z "$line" ]] && continue
+                local dev_addr=$(echo "$line" | awk '{print $1}')
+                PCI_ADDRESSES+=("$dev_addr")
+            done < <(lspci -d "$id" -D 2>/dev/null)
+        done
+    else
+        # Direct PCI address
+        local pci_raw="$target"
+        [[ ! "$pci_raw" =~ ^[0-9a-fA-F]{4}: ]] && pci_raw="0000:${pci_raw}"
+        PCI_ADDRESSES+=("$pci_raw")
+    fi
+
+    if (( ${#PCI_ADDRESSES[@]} == 0 )); then
+        msg_err "No matching PCI devices found for: ${target}"
+        return 1
+    fi
+
+    echo ""
+    echo "<!-- ==================================================================== -->"
+    echo "<!-- Libvirt Passthrough Hostdev XML for: ${profile_title} -->"
+    [[ -n "$profile_desc" ]] && echo "<!-- Description: ${profile_desc} -->"
+    echo "<!-- Paste this block into your domain XML using 'virsh edit <vm>'      -->"
+    echo "<!-- or through Virtual Machine Manager (virt-manager) XML editor        -->"
+    echo "<!-- ==================================================================== -->"
+    echo ""
+
+    for full_addr in "${PCI_ADDRESSES[@]}"; do
+        local domain="${full_addr%%:*}"
+        local remainder="${full_addr#*:}"
+        local bus="${remainder%%:*}"
+        local slot_fn="${remainder#*:}"
+        local slot="${slot_fn%%.*}"
+        local fn="${slot_fn#*.}"
+
+        local dev_name
+        dev_name=$(lspci -s "$full_addr" 2>/dev/null | sed "s/^[^ ]* //")
+
+        echo "<!-- ${dev_name} (${full_addr}) -->"
+        echo "<hostdev mode='subsystem' type='pci' managed='yes'>"
+        echo "  <source>"
+        echo "    <address domain='0x${domain}' bus='0x${bus}' slot='0x${slot}' function='0x${fn}'/>"
+        echo "  </source>"
+        echo "</hostdev>"
+        echo ""
+    done
+}
+
+# ==============================================================================
 # Install / Setup
 # ==============================================================================
 cmd_install() {
@@ -596,7 +712,7 @@ cmd_help() {
     echo -e "${BOLD}limine-vfio${RESET} (v${VERSION}) - Dynamic Device Passthrough Manager for Limine"
     echo ""
     echo -e "${BOLD}USAGE:${RESET}"
-    echo "  limine-vfio <command>"
+    echo "  limine-vfio <command> [arguments]"
     echo ""
     echo -e "${BOLD}COMMANDS:${RESET}"
     echo "  check          Run pre-flight checks (CPU virtualization, IOMMU, Limine, modules)"
@@ -604,6 +720,7 @@ cmd_help() {
     echo "  status         Display current driver bindings, active cmdline, and configured profiles"
     echo "  add            Interactive wizard to discover, classify, and configure a new passthrough profile"
     echo "  remove         Interactive removal of an existing passthrough profile"
+    echo "  generate-xml   Generate libvirt <hostdev> XML block for virt-manager/virsh"
     echo "  install        Deploy Limine hook, initialize /etc/vfio-passthrough.d, and link binary"
     echo "  help           Show this help message"
     echo ""
@@ -614,13 +731,15 @@ cmd_help() {
 # ==============================================================================
 main() {
     local cmd="${1:-help}"
+    shift || true
     case "$cmd" in
-        check)        cmd_check ;;
-        list-devices|list|devices) cmd_list_devices ;;
-        status)       cmd_status ;;
-        add)          cmd_add ;;
-        remove)       cmd_remove ;;
-        install|install-hook|setup) cmd_install ;;
+        check)        cmd_check "$@" ;;
+        list-devices|list|devices) cmd_list_devices "$@" ;;
+        status)       cmd_status "$@" ;;
+        add)          cmd_add "$@" ;;
+        remove)       cmd_remove "$@" ;;
+        generate-xml|xml|virt-xml) cmd_generate_xml "$@" ;;
+        install|install-hook|setup) cmd_install "$@" ;;
         help|--help|-h) cmd_help ;;
         *)
             msg_err "Unknown command: ${cmd}"
