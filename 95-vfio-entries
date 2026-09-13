@@ -1,13 +1,64 @@
 #!/usr/bin/env bash
+# ==============================================================================
+# Limine Post-Hook: Dynamic VFIO Passthrough Boot Entry Generator
+# ==============================================================================
+# Managed by: cachyos-vfio
+# Scans configured profiles in /etc/vfio-passthrough.d/*.conf and registers
+# corresponding VFIO boot entries for every installed kernel in Limine.
+# ==============================================================================
 
-# Source functions and environment variables
 readonly LIMINE_FUNCTIONS_PATH=/usr/lib/limine/limine-common-functions
 source "${LIMINE_FUNCTIONS_PATH}" || exit 1
 
 initialize_header || exit 1
 
-# Find kernels managed by limine-entry-tool
-# They are in $ESP_PATH/$MACHINE_ID/
+CONFIG_DIR="/etc/vfio-passthrough.d"
+MAIN_CONFIG="/etc/vfio-passthrough.conf"
+
+# Array of parsed profiles: format "profile_name|description|pci_ids"
+declare -a PROFILES=()
+
+load_profile_file() {
+    local file="$1"
+    [[ -f "$file" ]] || return 0
+    
+    local profile="" desc="" ids="" enabled="yes"
+    while IFS='=' read -r key val || [[ -n "$key" ]]; do
+        key=$(echo "$key" | tr -d '[:space:]')
+        val=$(echo "$val" | sed -e 's/^[[:space:]]*["'"'"']//' -e 's/["'"'"'][[:space:]]*$//')
+        [[ -z "$key" || "$key" == \#* ]] && continue
+        
+        case "$key" in
+            PROFILE|profile|NAME|name) profile="$val" ;;
+            DESCRIPTION|description|COMMENT|comment) desc="$val" ;;
+            PCI_IDS|pci_ids|IDS|ids) ids="$val" ;;
+            ENABLED|enabled) enabled="$val" ;;
+        esac
+    done < "$file"
+    
+    if [[ "$enabled" =~ ^(yes|true|1)$ ]] && [[ -n "$profile" && -n "$ids" ]]; then
+        [[ -z "$desc" ]] && desc="GPU Passthrough ${profile}"
+        PROFILES+=("${profile}|${desc}|${ids}")
+    fi
+}
+
+# 1. Load profiles from drop-in directory
+if [[ -d "$CONFIG_DIR" ]]; then
+    for conf in "$CONFIG_DIR"/*.conf; do
+        [[ -f "$conf" ]] && load_profile_file "$conf"
+    done
+fi
+
+# 2. Fallback: if no drop-in profiles found, check legacy hardcoded profiles
+if ((${#PROFILES[@]} == 0)); then
+    # Default fallback profiles for existing setup
+    PROFILES+=(
+        "1060|GPU Passthrough 1060|10de:1c03,10de:10f1"
+        "5090|GPU Passthrough 5090|10de:2b85,10de:22e8"
+    )
+fi
+
+# Iterate over all kernel directories in Limine ESP
 for kDir in "${ESP_PATH}/${MACHINE_ID}"/*; do
     [[ -d "$kDir" ]] || continue
     kName=$(basename "$kDir")
@@ -15,11 +66,11 @@ for kDir in "${ESP_PATH}/${MACHINE_ID}"/*; do
     # Avoid processing our own suffixes or fallbacks
     [[ "$kName" == *-vfio-* || "$kName" == *-fallback* ]] && continue
     
-    # In limine-mkinitcpio-hook >= 1.37.1, kernel name suffixes were removed
+    # Support modern filenames (limine-mkinitcpio-hook >= 1.37.1)
     initramfs_path="${kDir}/initramfs"
     vmlinuz_path="${kDir}/vmlinuz"
     
-    # Fallback for older limine-mkinitcpio-hook (< 1.37.1)
+    # Fallback for older naming convention (< 1.37.1)
     if [[ ! -f "$initramfs_path" || ! -f "$vmlinuz_path" ]]; then
         initramfs_path="${kDir}/initramfs-${kName}"
         vmlinuz_path="${kDir}/vmlinuz-${kName}"
@@ -27,9 +78,12 @@ for kDir in "${ESP_PATH}/${MACHINE_ID}"/*; do
     
     [[ -f "$initramfs_path" && -f "$vmlinuz_path" ]] || continue
     
-    # Add 1060 entry
-    limine-entry-tool --add-kernel "${kName}" "${initramfs_path}" "${vmlinuz_path}" "-vfio-1060" --comment "GPU Passthrough 1060" --no-mutex --no-hooks --quiet
-    
-    # Add 5090 entry
-    limine-entry-tool --add-kernel "${kName}" "${initramfs_path}" "${vmlinuz_path}" "-vfio-5090" --comment "GPU Passthrough 5090" --no-mutex --no-hooks --quiet
+    # Register an entry for each active profile
+    for p in "${PROFILES[@]}"; do
+        IFS='|' read -r pName pDesc pIds <<< "$p"
+        suffix="-vfio-${pName}"
+        
+        limine-entry-tool --add-kernel "${kName}" "${initramfs_path}" "${vmlinuz_path}" \
+            "${suffix}" --comment "${pDesc}" --no-mutex --no-hooks --quiet
+    done
 done

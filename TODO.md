@@ -1,26 +1,27 @@
-# GPU Passthrough Recovery Task List
+# GPU Passthrough Recovery & Automation Tool Task List
 
-## Session: Post-Update Passthrough Failure Investigation & Fix
+## Session 1: Post-Update Passthrough Failure Investigation & Fix
+- [x] **Task 1: System & Boot Investigation** (6.18.50-lts booted without VFIO IDs; GTX 1060 claimed by nouveau)
+- [x] **Task 2: Root Cause Analysis** (limine-mkinitcpio-hook 1.37.1 changed filenames to `initramfs` and `vmlinuz`)
+- [x] **Task 3: Apply Fixes** (Created updated hook script with modern + fallback detection; ran `limine-update`)
+- [x] **Task 4: Verification & Documentation** (Verified `/etc` hook; updated `GEMINI.md`)
+- [x] **Task 5: Git Repository & GitHub Remote Setup** (Initialized repo, committed, created and pushed to `weignerg/cachyos-dual-gpu-vfio`)
 
-- [x] **Task 1: System & Boot Investigation**
-  - [x] Check current booted kernel and kernel commandline (`6.18.50-1-cachyos-lts`, standard cmdline without `vfio-pci.ids`)
-  - [x] Check GPU PCI IDs, current driver bindings (`GTX 1060` claimed by `nouveau` and `snd_hda_intel`, `RTX 5090` by `nvidia`)
-  - [x] Inspect pacman log for recent updates (`limine-mkinitcpio-hook` updated `1.36.0-1` -> `1.37.1-1`, kernels updated to `6.18.50-lts` & `7.2.5`)
-  - [x] Inspect `/boot/limine.conf`, `/etc/default/limine`, and `/etc/boot/hooks/post.d/95-vfio-entries`
-  - [x] Check `/etc/mkinitcpio.conf` and `/etc/modprobe.d/` configs (all intact)
-- [x] **Task 2: Root Cause Analysis**
-  - [x] Identified root cause: `limine-mkinitcpio-hook` v1.37.1 simplified non-UKI initramfs and vmlinuz filenames from `initramfs-${kernel}` / `vmlinuz-${kernel}` to `initramfs` and `vmlinuz`.
-  - [x] Post-hook `/etc/boot/hooks/post.d/95-vfio-entries` was checking `[[ -f "$initramfs_path" && -f "$vmlinuz_path" ]]` with the old filename pattern, causing it to silently skip all kernels and omit the VFIO boot entries during `limine-update`.
-- [x] **Task 3: Apply Fixes**
-  - [x] Created updated hook script [95-vfio-entries](file:///home/weignerg/nvidia-gpus/95-vfio-entries) supporting both new and legacy naming conventions.
-  - [x] Deployed updated hook to `/etc/boot/hooks/post.d/95-vfio-entries`.
-  - [x] Successfully ran `limine-update` to rebuild initramfs and regenerate Limine entries.
-- [x] **Task 4: Verification & Documentation**
-  - [x] Verified `/etc/boot/hooks/post.d/95-vfio-entries` deployed and verified hook execution completed without error.
-  - [x] Updated [GEMINI.md](file:///home/weignerg/nvidia-gpus/GEMINI.md) with the new hook script definition and changelog details.
-- [x] **Task 5: Git Repository & GitHub Remote Setup**
-  - [x] Created comprehensive [README.md](file:///home/weignerg/nvidia-gpus/README.md) and [.gitignore](file:///home/weignerg/nvidia-gpus/.gitignore).
-  - [x] Initialized Git repository on branch `main` and created initial commit.
-  - [x] Installed `github-cli` package via pacman.
-  - [x] Created private remote repository `weignerg/cachyos-dual-gpu-vfio` on GitHub.
-  - [x] Pushed `main` branch to remote origin.
+## Session 2: Generalizing into an Interactive CLI Tool (`cachyos-vfio`)
+- [x] **Task 6: Configuration Specification & Generic Hook**
+  - [x] Designed modular `/etc/vfio-passthrough.d/` architecture and global `/etc/vfio-passthrough.conf`
+  - [x] Created `profiles.d/1060.conf.example` and `profiles.d/5090.conf.example`
+  - [x] Refactored `95-vfio-entries` to dynamically parse profiles from `/etc/vfio-passthrough.d/`
+- [x] **Task 7: Build `cachyos-vfio` Management CLI**
+  - [x] Implemented `check` (CPU virtualization, IOMMU state, Limine, mkinitcpio)
+  - [x] Implemented `list-devices` (PCI scanning, IOMMU group mapping, audio pairing detection)
+  - [x] Implemented `status` (active driver bindings, configured profiles, bootloader entries)
+  - [x] Implemented `add` (interactive wizard with IOMMU group validation, profile generation, Limine config)
+  - [x] Implemented `remove` (profile deletion and cleanup)
+  - [x] Implemented `install` (automating deployment, directory setup, profile seeding, and `/usr/local/bin` symlink)
+- [x] **Task 8: Verification & Deployment**
+  - [x] Tested `cachyos-vfio check`, `list-devices`, and `status`
+  - [x] Deployed dynamic hook and seeded `/etc/vfio-passthrough.d/` via `cachyos-vfio install`
+  - [x] Verified `/usr/local/bin/cachyos-vfio` command is directly accessible in system PATH
+  - [x] Updated documentation in `README.md` and `GEMINI.md`
+  - [x] Committed and pushed changes to GitHub

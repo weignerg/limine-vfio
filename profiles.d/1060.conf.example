@@ -1,0 +1,8 @@
+# /etc/vfio-passthrough.d/1060.conf
+# Passthrough profile for GeForce GTX 1060
+
+PROFILE="1060"
+DESCRIPTION="GPU Passthrough GTX 1060"
+# GPU VGA (10de:1c03) + HDMI Audio (10de:10f1)
+PCI_IDS="10de:1c03,10de:10f1"
+ENABLED="yes"

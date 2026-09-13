@@ -1,0 +1,7 @@
+# /etc/vfio-passthrough.conf
+# Global settings for cachyos-vfio passthrough management
+
+# Extra kernel parameters to include alongside vfio-pci.ids
+# On AMD systems: amd_iommu=on iommu=pt
+# On Intel systems: intel_iommu=on iommu=pt
+IOMMU_PARAMS="amd_iommu=on iommu=pt"
