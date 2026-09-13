@@ -2,7 +2,7 @@
 
 ## 1. System Integration & Verification (Local Host)
 - [x] **Install via native `pacman`:** Installed `limine-vfio` via `pacman -U` with full system package tracking (`pacman -Q limine-vfio`).
-- [ ] **End-to-End VM Passthrough Test:** Boot a test KVM/QEMU virtual machine attaching the GTX 1060 (`82:00.0` and `82:00.1`) using the generated libvirt XML to confirm zero host-driver contention and clean guest initialization.
+- [ ] **End-to-End VM Passthrough Test:** Boot existing KVM/QEMU virtual machines (`win11-1060` or `win11-5090`) attaching either card to confirm zero host-driver contention and clean guest initialization.
 - [x] **Multi-Kernel Boot Verification:** Verified boot entries appear and synchronize properly across all installed kernels (`linux-cachyos-lts` and `linux-cachyos`).
 
 ## 2. AUR & Upstream Distribution

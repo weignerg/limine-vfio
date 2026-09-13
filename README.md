@@ -41,18 +41,44 @@ It supports passing through **GPUs**, **Network Adapters (NICs)**, **USB Control
 
 `limine-vfio` includes real-world profile templates based on tested workstation configurations:
 
-### 1. Dual-GPU Passthrough (Host Display & Compute + VM Isolated GPU)
-In a dual-GPU workstation (such as an **RTX 5090** primary and a **GTX 1060** secondary):
-- **Primary GPU (RTX 5090):** Retained by the host for desktop display (KDE Plasma / Wayland) and high-performance CUDA workloads via the proprietary `nvidia` driver.
-- **Secondary GPU (GTX 1060):** Isolated via `vfio-pci` along with its companion HDMI audio controller (`10de:10f1`).
-- **Driver Exclusion:** Automatically prompts to exclude the secondary GPU from the proprietary driver via `/etc/modprobe.d/nvidia-utils.conf` (`NVreg_ExcludedGpus=0000:82:00.0`), allowing `nouveau` fallback on standard boots or `vfio-pci` binding in passthrough boots.
+### 1. Reversible Dual-GPU Multi-Boot Passthrough (Host Display & Dedicated VM Options)
+In an advanced dual-GPU workstation (such as an **RTX 5090** primary and a **GTX 1060** secondary driving multiple physical monitors):
+- **Boot Choice 1 — Standard Host Desktop (Dual-GPU Host):**
+  - No `vfio-pci` parameters applied.
+  - Primary GPU (RTX 5090) runs the proprietary `nvidia` driver for host desktop and CUDA compute.
+  - Secondary GPU (GTX 1060) runs open-source `nouveau` driving auxiliary host monitors.
+  - All displays are active simultaneously across both GPUs in KDE Plasma / Wayland.
+- **Boot Choice 2 — Secondary GPU Passthrough (`win11-1060` VM):**
+  - Kernel command line boots with `vfio-pci.ids=10de:1c03,10de:10f1`.
+  - GTX 1060 + audio are isolated into `vfio-pci` at early boot with zero host driver contention.
+  - Primary RTX 5090 remains fully attached to the host for desktop display and compute.
+  - The guest VM (e.g. `win11-1060`) claims the card immediately without driver conflicts.
+- **Boot Choice 3 — Primary GPU Passthrough (`win11-5090` VM):**
+  - Kernel command line boots with `vfio-pci.ids=10de:2b85,10de:22e8`.
+  - RTX 5090 + audio are isolated into `vfio-pci` for high-performance guest workloads (e.g. Windows gaming or AI/ML).
+  - Secondary GTX 1060 automatically provides host desktop display via `nouveau` on its connected monitors.
+  - The guest VM (e.g. `win11-5090`) claims the RTX 5090 with bare-metal speed.
 
+> [!TIP]
+> **Zero VM Reconfiguration Required:**
+> If you already have existing virtual machines configured in Virtual Machine Manager (`virt-manager`) or `virsh` (e.g. `win11-1060` or `win11-5090`), **no VM modifications are needed**. Libvirt `<hostdev>` blocks target the fixed physical PCI addresses (`0000:82:00.0` or `0000:81:00.0`), which do not change. `limine-vfio` handles the host-side early binding so the device is already pre-isolated and waiting for the VM when the system boots.
+
+#### Profile Configurations:
 ```ini
 # /etc/vfio-passthrough.d/1060.conf
 PROFILE="1060"
 DEVICE_TYPE="GPU"
 DESCRIPTION="GPU Passthrough GTX 1060"
 PCI_IDS="10de:1c03,10de:10f1"
+ENABLED="yes"
+```
+
+```ini
+# /etc/vfio-passthrough.d/5090.conf
+PROFILE="5090"
+DEVICE_TYPE="GPU"
+DESCRIPTION="GPU Passthrough RTX 5090"
+PCI_IDS="10de:2b85,10de:22e8"
 ENABLED="yes"
 ```
 

@@ -6,9 +6,12 @@
 The project includes the **`limine-vfio`** CLI utility, a dynamic post-hook script for `limine-entry-tool`, and Arch / AUR packaging files (`PKGBUILD`, `limine-vfio.install`, `.SRCINFO`).
 
 ## Hardware Configuration (Workstation Setup)
-- **Primary GPU (RTX 5090 - `0000:81:00.0`):** Host display and CUDA compute via proprietary `nvidia` driver.
-- **Secondary GPU (GTX 1060 - `0000:82:00.0`):** Host secondary display via `nouveau` or VM passthrough via `vfio-pci`.
-  - Excluded from proprietary driver via `/etc/modprobe.d/nvidia-utils.conf` (`NVreg_ExcludedGpus=0000:82:00.0`).
+- **Reversible Dual-GPU Multi-Boot Passthrough:**
+  - **Option 1 (Standard Boot):** Dual-GPU host desktop. RTX 5090 runs on `nvidia` (primary display & CUDA); GTX 1060 runs on `nouveau` (auxiliary displays).
+  - **Option 2 (`vfio-1060` Boot):** GTX 1060 (`0000:82:00.0` + audio `82:00.1`) isolated for guest VM (e.g. `win11-1060`); RTX 5090 drives host desktop and CUDA compute.
+  - **Option 3 (`vfio-5090` Boot):** RTX 5090 (`0000:81:00.0` + audio `81:00.1`) isolated for guest VM (e.g. `win11-5090`); GTX 1060 drives host desktop via `nouveau`.
+- **Driver Rules:**
+  - GTX 1060 excluded from proprietary driver via `/etc/modprobe.d/nvidia-utils.conf` (`NVreg_ExcludedGpus=0000:82:00.0`).
   - Nouveau enabled via `/etc/modprobe.d/nouveau.conf`.
 
 ## Architecture & Configuration Files
