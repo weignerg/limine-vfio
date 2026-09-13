@@ -19,6 +19,7 @@ The project includes the **`limine-vfio`** CLI utility, a dynamic post-hook scri
 - **Limine Settings:** `/etc/default/limine` (stores `KERNEL_CMDLINE` definitions).
 - **Initramfs:** `/etc/mkinitcpio.conf` (`MODULES=(vfio_pci vfio vfio_iommu_type1)`).
 - **Packaging:** `PKGBUILD`, `limine-vfio.install`, `.SRCINFO`, `LICENSE`.
+- **Documentation:** `README.md`, `HISTORY.md` (milestones & changelog), `TODO.md` (actionable roadmap).
 
 ## CLI Commands
 - `limine-vfio check`: Pre-flight diagnostics (CPU virtualization, IOMMU, Limine, modules).

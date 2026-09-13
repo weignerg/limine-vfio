@@ -1,59 +1,28 @@
-# GPU & Device Passthrough Automation Tool Task List
+# limine-vfio: Remaining Tasks & Roadmap
 
-## Session 1: Post-Update Passthrough Failure Investigation & Fix
-- [x] **Task 1: System & Boot Investigation** (6.18.50-lts booted without VFIO IDs; GTX 1060 claimed by nouveau)
-- [x] **Task 2: Root Cause Analysis** (limine-mkinitcpio-hook 1.37.1 changed filenames to `initramfs` and `vmlinuz`)
-- [x] **Task 3: Apply Fixes** (Created updated hook script with modern + fallback detection; ran `limine-update`)
-- [x] **Task 4: Verification & Documentation** (Verified `/etc` hook; updated `GEMINI.md`)
-- [x] **Task 5: Git Repository & GitHub Remote Setup** (Initialized repo, committed, created and pushed to `weignerg/cachyos-dual-gpu-vfio`)
+## 1. System Integration & Verification (Local Host)
+- [ ] **Install via native `pacman`:** Run `makepkg -si` locally to transition the system from loose file symlinks to full pacman database tracking (`pacman -Q limine-vfio`).
+- [ ] **End-to-End VM Passthrough Test:** Boot a test KVM/QEMU virtual machine attaching the GTX 1060 (`82:00.0` and `82:00.1`) to confirm zero host-driver contention and clean guest initialization.
+- [ ] **Multi-Kernel Boot Verification:** Verify boot entries appear and load properly across all installed kernels (e.g. `linux-cachyos-lts` and standard kernels).
 
-## Session 2: Generalizing into an Interactive CLI Tool (`cachyos-vfio`)
-- [x] **Task 6: Configuration Specification & Generic Hook** (Created `/etc/vfio-passthrough.d/` architecture and dynamic hook)
-- [x] **Task 7: Build `cachyos-vfio` Management CLI** (Implemented `check`, `list-devices`, `status`, `add`, `remove`, `install`)
-- [x] **Task 8: Verification & Deployment** (Deployed hook, seeded profiles, tested `/usr/local/bin/cachyos-vfio`)
+## 2. AUR & Upstream Distribution
+- [ ] **Monitor AUR Registrations:** Check [aur.archlinux.org](https://aur.archlinux.org/) for the reopening of new maintainer account registrations.
+- [ ] **Register AUR Maintainer Account:** Upload public SSH key (`~/.ssh/id_ed25519.pub`) upon registration opening.
+- [ ] **Publish Package to AUR:**
+  ```bash
+  git clone ssh://aur@aur.archlinux.org/limine-vfio.git /tmp/limine-vfio-aur
+  cp PKGBUILD .SRCINFO limine-vfio.install limine-vfio 95-vfio-entries vfio-passthrough.conf.example example-profile.conf LICENSE /tmp/limine-vfio-aur/
+  cd /tmp/limine-vfio-aur && git add . && git commit -m "Initial release of limine-vfio 1.0.0" && git push origin master
+  ```
+- [ ] **Verify AUR Helper Installation:** Confirm installation via `paru -S limine-vfio` and `yay -S limine-vfio`.
 
-## Session 3: Universal Device Classification & Repo Generalization
-- [x] **Task 9: GitHub Repository Renaming**
-  - [x] Renamed GitHub repository from `weignerg/cachyos-dual-gpu-vfio` to `weignerg/limine-vfio`
-  - [x] Updated local git remote tracking URL
-- [x] **Task 10: Device Classification & Removing GPU-Specific Assumptions**
-  - [x] Added automated PCI device classification (`GPU`, `NETWORK`, `USB`, `STORAGE`, `AUDIO`, `CAPTURE`, `ACCELERATOR`, `SYSTEM`)
-  - [x] Updated `list-devices` to badge each device with its classification type
-  - [x] Generalized `cmd_add` to detect all passthrough-eligible hardware
-  - [x] Scoped NVIDIA driver exclusion prompts exclusively to NVIDIA GPU devices
-  - [x] Updated `95-vfio-entries` to support `DEVICE_TYPE` in profiles
-  - [x] Added `nic.conf.example` and `usb.conf.example`
-- [x] **Task 11: Verification & Documentation**
-  - [x] Updated `README.md` and `GEMINI.md`
-  - [x] Verified `limine-vfio list-devices` and `limine-vfio status`
+## 3. GitHub & Release Infrastructure
+- [ ] **GitHub Release Tagging:** Tag `v1.0.0` and publish prebuilt `.pkg.tar.zst` artifact on GitHub Releases for direct URL installs (`pacman -U https://...`).
+- [ ] **CI/CD Build Automation:** Add a GitHub Actions workflow (`.github/workflows/makepkg.yml`) to automatically validate `PKGBUILD`, verify sha256 checksums, and check `.SRCINFO` formatting on every commit.
+- [ ] **Repository Visibility:** Evaluate making the GitHub repository public when ready for broader community adoption.
 
-## Session 4: AUR Packaging & Pre-flight Safeguards
-- [x] **Task 12: Package Build Specification (`PKGBUILD`)**
-  - [x] Created `PKGBUILD` with explicit dependencies (`limine`, `limine-entry-tool`, `pciutils`, `bash`, `coreutils`)
-  - [x] Defined optional dependencies (`mkinitcpio`, `limine-mkinitcpio-hook`, `qemu-desktop`, `libvirt`, `zenity`)
-  - [x] Added `cachyos-vfio` symlink for backward compatibility
-  - [x] Added MIT `LICENSE`
-- [x] **Task 13: Safeguards & Install Script (`limine-vfio.install`)**
-  - [x] UEFI environment detection in `pre_install`
-  - [x] Limine bootloader configuration verification in `pre_install`
-  - [x] Hardware CPU Virtualization (AMD-V / Intel VT-x) detection in `pre_install`
-  - [x] Clear post-install guidance and next steps in `post_install`
-- [x] **Task 14: Checksums & Build Verification**
-  - [x] Generated sha256 checksums with `updpkgsums`
-  - [x] Tested full package creation with `makepkg -cf --nodeps`
-  - [x] Generated `.SRCINFO` with `makepkg --printsrcinfo`
-  - [x] Verified package archive layout and file permissions
-- [x] **Task 15: Commit & Remote Sync**
-  - [x] Synchronize repository to `weignerg/limine-vfio`
-- [x] **Task 16: Document Interim Non-AUR Installation Guidance**
-  - [x] Added interim installation callout in `README.md` explaining AUR registration suspension
-  - [x] Documented native local installation via `makepkg -si`, prebuilt packages, and standalone scripts
-  - [x] Synchronized documentation updates to GitHub remote
-- [x] **Task 17: Clean Up Legacy Nomenclature & Showcase History-Derived Examples**
-  - [x] Removed all former name mentions from documentation, code, and hook headers
-  - [x] Removed vestigial symlink from repository and package spec
-  - [x] Added "Real-World Passthrough Examples" section to `README.md` (Dual-GPU, 10GbE NIC, USB, NVMe)
-  - [x] Added `nvme.conf.example` to `profiles.d/`
-  - [x] Regenerated source checksums and `.SRCINFO`
-
-
+## 4. Feature Enhancements (Backlog)
+- [ ] **Libvirt XML Generation:** Implement a `limine-vfio generate-xml <profile>` subcommand to automatically output formatted `<hostdev>` XML blocks ready to paste into `virt-manager` or `virsh edit`.
+- [ ] **Shell Autocompletion:** Provide autocompletion scripts for Bash, Zsh, and Fish shells (`/usr/share/bash-completion/completions/limine-vfio`, `/usr/share/zsh/site-functions/_limine-vfio`, `/usr/share/fish/vendor_completions.d/limine-vfio.fish`).
+- [ ] **Interactive ACS Override Warning:** Add check and advisory notice if a user attempts passthrough on devices in shared IOMMU groups on motherboards lacking native PCIe slot isolation.
+- [ ] **Manual Page:** Generate a standard man page (`man/limine-vfio.1`) and install to `/usr/share/man/man1/`.

@@ -200,4 +200,5 @@ Runs automatically during kernel installations and updates (`limine-update` / `p
 - [`LICENSE`](./LICENSE): MIT License.
 - [`README.md`](./README.md): Complete system documentation and guides.
 - [`GEMINI.md`](./GEMINI.md): Project architecture and memory.
-- [`TODO.md`](./TODO.md): Session logs and task history.
+- [`HISTORY.md`](./HISTORY.md): Project history and development milestones.
+- [`TODO.md`](./TODO.md): Project roadmap and remaining tasks.
