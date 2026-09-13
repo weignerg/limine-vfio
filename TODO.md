@@ -18,3 +18,9 @@
 - [x] **Task 4: Verification & Documentation**
   - [x] Verified `/etc/boot/hooks/post.d/95-vfio-entries` deployed and verified hook execution completed without error.
   - [x] Updated [GEMINI.md](file:///home/weignerg/nvidia-gpus/GEMINI.md) with the new hook script definition and changelog details.
+- [x] **Task 5: Git Repository & GitHub Remote Setup**
+  - [x] Created comprehensive [README.md](file:///home/weignerg/nvidia-gpus/README.md) and [.gitignore](file:///home/weignerg/nvidia-gpus/.gitignore).
+  - [x] Initialized Git repository on branch `main` and created initial commit.
+  - [x] Installed `github-cli` package via pacman.
+  - [x] Created private remote repository `weignerg/cachyos-dual-gpu-vfio` on GitHub.
+  - [x] Pushed `main` branch to remote origin.
