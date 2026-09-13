@@ -55,4 +55,12 @@
   - Added interactive guided repair to cleanly disable conflicting profiles, purge orphan lines, generate missing parameters, and update the bootloader menu.
 - **Shell Completions & Man Page Updates:** Updated Fish, Bash, and Zsh completion files and Unix manual page (`man/limine-vfio.1`) with the `doctor` subcommand.
 
-
+### Session 9: Dual-GPU Multi-Boot Passthrough Architecture & Refined Conflict Guards
+- **Dual-GPU Multi-Boot Configuration:** Configured independent boot options for both GPUs:
+  - Enabled `/etc/vfio-passthrough.d/1060.conf` (GTX 1060 passthrough option, RTX 5090 host driver).
+  - Enabled `/etc/vfio-passthrough.d/5090.conf` (RTX 5090 passthrough option, GTX 1060 host driver via `nouveau`).
+  - Added full matrix of `KERNEL_CMDLINE` definitions in `/etc/default/limine` for both `linux-cachyos-lts` and `linux-cachyos`.
+  - Rebuilt bootloader menu via `limine-update`.
+- **Refined Conflict Detection Engine:** Upgraded `check_conflicts` to discover all display GPUs on the PCI bus:
+  - Total GPU lockout (isolating all available display cards) is classified as a critical conflict.
+  - Multi-GPU setups with alternate passthrough profiles targeting the primary `boot_vga` GPU are recognized as valid alternate configurations and reported with informational notices rather than false-positive errors.

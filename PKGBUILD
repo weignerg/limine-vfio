@@ -25,7 +25,7 @@ source=("limine-vfio"
         "limine-vfio.fish"
         "limine-vfio.1"
         "LICENSE")
-sha256sums=('125da44805964611a1b0c48d52835580c2c0703a9c53edf6cee6e82f1c1d6721'
+sha256sums=('c74b0a189eee344c8085cfd24d01c72425cc7400ba02e4f53471b1c4b6904b77'
             'c4475b9f8367f67904be094e42b666a1af13af4fb7a35ab155e00ea41f1a7b69'
             '02438e03bc29ccf9d8178a465d0981347e649bed8f0ef5ce38a3e872fa61ae60'
             'd29a0d4ac548ff10b4add8da243259b258961c502204e1633732dcd2f360e37d'

@@ -197,16 +197,31 @@ check_conflicts() {
         msg_err "CRITICAL: KERNEL_CMDLINE[default] in ${LIMINE_DEFAULT} contains 'vfio-pci.ids'. This isolates devices on EVERY boot, preventing standard desktop use!"
     fi
 
-    # 2. Find Primary Display GPU (boot_vga == 1)
+    # 2. Discover all display GPUs and Primary Display GPU (boot_vga == 1)
+    local -a ALL_GPU_IDS=()
+    local -a ALL_GPU_PCIS=()
     local primary_gpu_pci=""
     local primary_gpu_id=""
     for dev in /sys/bus/pci/devices/*; do
-        if [[ -f "$dev/boot_vga" ]] && [[ $(cat "$dev/boot_vga" 2>/dev/null) == "1" ]]; then
-            primary_gpu_pci=$(basename "$dev")
-            primary_gpu_id=$(lspci -nns "$primary_gpu_pci" 2>/dev/null | grep -o '\[[0-9a-fA-F]\{4\}:[0-9a-fA-F]\{4\}\]' | tail -n 1 | tr -d '[]')
-            break
+        if [[ -f "$dev/class" ]]; then
+            local class_code
+            class_code=$(cat "$dev/class" 2>/dev/null || true)
+            if [[ "$class_code" =~ ^0x030[02] || "$class_code" =~ ^0x0380 ]]; then
+                local dev_pci dev_id
+                dev_pci=$(basename "$dev")
+                dev_id=$(lspci -nns "$dev_pci" 2>/dev/null | grep -o '\[[0-9a-fA-F]\{4\}:[0-9a-fA-F]\{4\}\]' | tail -n 1 | tr -d '[]')
+                ALL_GPU_IDS+=("$dev_id")
+                ALL_GPU_PCIS+=("$dev_pci")
+                if [[ -f "$dev/boot_vga" ]] && [[ $(cat "$dev/boot_vga" 2>/dev/null) == "1" ]]; then
+                    primary_gpu_pci="$dev_pci"
+                    primary_gpu_id="$dev_id"
+                fi
+            fi
         fi
     done
+    local total_gpus=${#ALL_GPU_IDS[@]}
+    local -a LOCKOUT_PROFILES=()
+    local -a ALTERNATE_GPU_PROFILES=()
 
     # 3. Check profiles in /etc/vfio-passthrough.d
     declare -A ACTIVE_PROFILES=()
@@ -228,10 +243,23 @@ check_conflicts() {
             p_name="${p_name:-$bName}"
             ACTIVE_PROFILES["$p_name"]="$p_enabled"
 
-            # Check if enabled profile targets primary display GPU
-            if [[ -n "$primary_gpu_id" && "$p_ids" =~ $primary_gpu_id ]] && [[ "$p_enabled" =~ ^(yes|true|1)$ ]]; then
-                PRIMARY_GPU_PROFILES+=("$p_name")
-                conflicts_found=$((conflicts_found + 1))
+            # Check if enabled profile targets GPUs
+            if [[ "$p_enabled" =~ ^(yes|true|1)$ ]] && ((total_gpus > 0)); then
+                local isolated_gpus=0
+                for g_id in "${ALL_GPU_IDS[@]}"; do
+                    if [[ "$p_ids" =~ $g_id ]]; then
+                        isolated_gpus=$((isolated_gpus + 1))
+                    fi
+                done
+
+                if ((isolated_gpus >= total_gpus)); then
+                    # All GPUs in the system are isolated: total host lockout!
+                    LOCKOUT_PROFILES+=("$p_name")
+                    conflicts_found=$((conflicts_found + 1))
+                elif [[ -n "$primary_gpu_id" && "$p_ids" =~ $primary_gpu_id ]]; then
+                    # Primary GPU isolated, but another GPU exists for host display
+                    ALTERNATE_GPU_PROFILES+=("$p_name")
+                fi
             fi
 
             # Check if enabled profile has corresponding KERNEL_CMDLINE entries for installed kernels
@@ -266,15 +294,18 @@ check_conflicts() {
 
     if ((conflicts_found == 0)); then
         msg_ok "No conflicts detected in Limine boot configuration."
+        for p in "${ALTERNATE_GPU_PROFILES[@]}"; do
+            echo "  * [INFO] Multi-GPU Profile '${p}' isolates primary boot GPU (${primary_gpu_pci}). Secondary GPU will serve host display."
+        done
         return 0
     fi
 
     echo ""
     msg_warn "Detected ${conflicts_found} potential configuration conflict(s):"
 
-    for p in "${PRIMARY_GPU_PROFILES[@]}"; do
-        msg_warn "  * Profile '${p}' targets Primary Host Display GPU (${primary_gpu_pci} [${primary_gpu_id}])."
-        echo "    -> Booting into this entry will disconnect your host desktop monitor session."
+    for p in "${LOCKOUT_PROFILES[@]}"; do
+        msg_err "  * Profile '${p}' isolates ALL available display GPUs in system (${total_gpus}/${total_gpus})."
+        echo "    -> Booting into this entry will result in a black screen / no host display!"
     done
 
     for orph in "${ORPHAN_KEYS[@]}"; do
@@ -301,10 +332,10 @@ check_conflicts() {
 
     check_root
 
-    # Fix 1: Primary GPU profiles
-    for p in "${PRIMARY_GPU_PROFILES[@]}"; do
+    # Fix 1: Lockout GPU profiles
+    for p in "${LOCKOUT_PROFILES[@]}"; do
         echo ""
-        read -rp "Disable profile '${p}' to prevent accidental host display lockout? [Y/n]: " dis_choice
+        read -rp "Disable profile '${p}' to prevent host display lockout? [Y/n]: " dis_choice
         if [[ ! "$dis_choice" =~ ^[Nn]$ ]]; then
             sed -i 's/^ENABLED=.*/ENABLED="no"/' "${CONFIG_DIR}/${p}.conf"
             sed -i "/-vfio-${p}\]/d" "$LIMINE_DEFAULT"
