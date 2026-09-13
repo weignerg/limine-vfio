@@ -1,0 +1,42 @@
+# limine-vfio.install
+
+pre_install() {
+    # Verify UEFI environment
+    if [ ! -d "/sys/firmware/efi" ]; then
+        echo "==> WARNING: This system does not appear to be booted in UEFI mode."
+        echo "==> Limine VFIO passthrough entries are designed for UEFI systems."
+    fi
+
+    # Check for Limine
+    if [ ! -f "/boot/limine.conf" ] && ! command -v limine-entry-tool >/dev/null 2>&1; then
+        echo "==> WARNING: Limine bootloader configuration (/boot/limine.conf) not found."
+        echo "==> Please ensure Limine is installed and configured as your active bootloader."
+    fi
+
+    # Check hardware virtualization
+    if ! grep -q -E '(vmx|svm)' /proc/cpuinfo 2>/dev/null; then
+        echo "==> WARNING: Hardware CPU virtualization (AMD-V / Intel VT-x) was not detected in /proc/cpuinfo."
+        echo "==> Make sure to enable virtualization (SVM or VT-x) in your UEFI/BIOS settings."
+    fi
+}
+
+post_install() {
+    echo ":: limine-vfio installed successfully."
+    echo ":: "
+    echo ":: Next Steps & Recommendations:"
+    echo ":: 1. Run 'limine-vfio check' to verify your CPU virtualization and IOMMU state."
+    echo ":: 2. Ensure /etc/mkinitcpio.conf includes the early VFIO modules:"
+    echo "::    MODULES=(vfio_pci vfio vfio_iommu_type1 ...)"
+    echo ":: 3. Run 'sudo limine-vfio add' to discover, classify, and configure devices for passthrough."
+    echo ":: 4. Run 'sudo limine-update' to regenerate the Limine bootloader menu."
+}
+
+post_upgrade() {
+    echo ":: limine-vfio upgraded. Run 'sudo limine-update' to refresh your bootloader entries."
+}
+
+post_remove() {
+    echo ":: limine-vfio has been removed."
+    echo ":: Note: Profiles in /etc/vfio-passthrough.d/ and entries in /etc/default/limine were preserved."
+    echo ":: Run 'sudo limine-update' if you wish to remove passthrough entries from your boot menu."
+}

@@ -1,7 +1,8 @@
 # /etc/vfio-passthrough.conf
-# Global settings for cachyos-vfio passthrough management
+# Global settings for limine-vfio passthrough management
 
 # Extra kernel parameters to include alongside vfio-pci.ids
 # On AMD systems: amd_iommu=on iommu=pt
 # On Intel systems: intel_iommu=on iommu=pt
-IOMMU_PARAMS="amd_iommu=on iommu=pt"
+# If left commented or unset, limine-vfio auto-detects CPU vendor (AMD-V vs Intel VT-d).
+# IOMMU_PARAMS="amd_iommu=on iommu=pt"
