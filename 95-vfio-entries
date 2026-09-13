@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+# Source functions and environment variables
+readonly LIMINE_FUNCTIONS_PATH=/usr/lib/limine/limine-common-functions
+source "${LIMINE_FUNCTIONS_PATH}" || exit 1
+
+initialize_header || exit 1
+
+# Find kernels managed by limine-entry-tool
+# They are in $ESP_PATH/$MACHINE_ID/
+for kDir in "${ESP_PATH}/${MACHINE_ID}"/*; do
+    [[ -d "$kDir" ]] || continue
+    kName=$(basename "$kDir")
+    
+    # Avoid processing our own suffixes or fallbacks
+    [[ "$kName" == *-vfio-* || "$kName" == *-fallback* ]] && continue
+    
+    # In limine-mkinitcpio-hook >= 1.37.1, kernel name suffixes were removed
+    initramfs_path="${kDir}/initramfs"
+    vmlinuz_path="${kDir}/vmlinuz"
+    
+    # Fallback for older limine-mkinitcpio-hook (< 1.37.1)
+    if [[ ! -f "$initramfs_path" || ! -f "$vmlinuz_path" ]]; then
+        initramfs_path="${kDir}/initramfs-${kName}"
+        vmlinuz_path="${kDir}/vmlinuz-${kName}"
+    fi
+    
+    [[ -f "$initramfs_path" && -f "$vmlinuz_path" ]] || continue
+    
+    # Add 1060 entry
+    limine-entry-tool --add-kernel "${kName}" "${initramfs_path}" "${vmlinuz_path}" "-vfio-1060" --comment "GPU Passthrough 1060" --no-mutex --no-hooks --quiet
+    
+    # Add 5090 entry
+    limine-entry-tool --add-kernel "${kName}" "${initramfs_path}" "${vmlinuz_path}" "-vfio-5090" --comment "GPU Passthrough 5090" --no-mutex --no-hooks --quiet
+done
